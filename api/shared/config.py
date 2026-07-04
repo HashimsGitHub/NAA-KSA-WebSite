@@ -11,6 +11,7 @@ from pathlib import Path
 import os
 import json
 
+
 # ==========================================================
 # Application
 # ==========================================================
@@ -22,6 +23,18 @@ APPLICATION_VERSION = "1.0.0"
 UNIVERSITY_ID = "NUST-KSA"
 
 DEFAULT_TIMEZONE = "Asia/Riyadh"
+
+# ==========================================================
+# Environment Variables
+# ==========================================================
+
+ENV_STORAGE_CONNECTION = "AZURE_STORAGE_CONNECTION_STRING"
+
+ENV_STORAGE_CONNECTION_STRING = "AZURE_STORAGE_CONNECTION_STRING"
+
+ENV_JWT_SECRET = "JWT_SECRET"
+
+ENV_APPLICATION_NAME = "APPLICATION_NAME"
 
 
 # ==========================================================
@@ -207,15 +220,6 @@ EVENT_CANCELLED = "cancelled"
 EVENT_COMPLETED = "completed"
 
 
-# ==========================================================
-# Environment Variables
-# ==========================================================
-
-ENV_STORAGE_CONNECTION = "AZURE_STORAGE_CONNECTION_STRING"
-
-ENV_JWT_SECRET = "JWT_SECRET"
-
-ENV_APPLICATION_NAME = "APPLICATION_NAME"
 
 
 # ==========================================================
@@ -224,7 +228,7 @@ ENV_APPLICATION_NAME = "APPLICATION_NAME"
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-API_ROOT = PROJECT_ROOT / "api"
+API_ROOT = Path(__file__).resolve().parents[1]
 
 FRONTEND_ROOT = PROJECT_ROOT / "frontend"
 
@@ -245,23 +249,22 @@ def get_container(name: str) -> str:
     return BLOB_CONTAINERS[name]
 
 
-def get_env(key: str) -> str:
-    # 1. ALWAYS check the live system environment variables first!
-    # This works automatically for Azure Production App Settings
-    if key in os.environ:
-        return os.environ[key]
-        
-    # 2. If not found in the live environment, try falling back to local files
-    try:
-        API_ROOT = Path(__file__).parents[1]
-        settings_path = API_ROOT / "local.settings.json"
-        
-        if settings_path.exists():
-            with open(settings_path, "r") as f:
-                data = json.load(f)
-                # Read from the "Values" dictionary block
-                return data.get("Values", {}).get(key)
-    except Exception:
-        pass # Fall through if file operations fail
-        
-    return None
+def get_env(key: str, default=None):
+    value = os.environ.get(key)
+    if value:
+        return value
+
+    settings_path = API_ROOT / "local.settings.json"
+
+    if settings_path.exists():
+        try:
+            with open(settings_path, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+
+            value = settings.get("Values", {}).get(key)
+            if value:
+                return value
+        except Exception:
+            pass
+
+    return default

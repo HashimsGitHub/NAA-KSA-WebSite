@@ -12,7 +12,9 @@ from pathlib import Path
 
 from azure.data.tables import TableServiceClient
 from azure.storage.blob import BlobServiceClient
+from shared.config import ENV_STORAGE_CONNECTION_STRING, get_env
 
+connection_string = get_env(ENV_STORAGE_CONNECTION_STRING)
 
 class StorageClient:
     """
