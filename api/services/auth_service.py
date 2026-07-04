@@ -8,7 +8,6 @@ from shared.password_utils import (
     hash_password,
     generate_temp_password,
 )
-from shared.jwt_utils import create_token, verify_token
 from shared.response_utils import success_response, error_response
 
 
@@ -49,12 +48,9 @@ class AuthService:
             user_agent=user_agent,
         )
 
-        token = create_token(
-            email=user["email"],
-            user_id=user["user_id"],
-            role=user["role"],
-            session_id=session["session_id"],
-        )
+        # KISS: use Azure Table session_id as the auth token.
+        # No JWT signing/verification required for this prototype.
+        token = session["session_id"]
 
         self.users.update_last_login(email)
 
@@ -77,18 +73,18 @@ class AuthService:
 
         return success_response("Logout successful.")
 
-    def validate_token(self, token: str) -> Dict:
-        payload = verify_token(token)
-
-        if not payload:
-            return error_response("Invalid or expired token.")
-
-        session_id = payload.get("session_id")
+    def validate_session(self, session_id: str) -> Dict:
+        if not session_id:
+            return error_response("Session is required.")
 
         if not self.sessions.is_session_valid(session_id):
             return error_response("Session is invalid or expired.")
 
-        user = self.users.get_user_by_email(payload.get("sub"))
+        session = self.sessions.get_session(session_id)
+        if not session:
+            return error_response("Session not found.")
+
+        user = self.users.get_user_by_email(session.get("email", ""))
 
         if not user:
             return error_response("User not found.")
@@ -96,13 +92,20 @@ class AuthService:
         if user.get("status") != STATUS_APPROVED:
             return error_response("User account is not approved.")
 
+        safe_user = self._safe_user(user)
+        safe_user["session_id"] = session_id
+
         return success_response(
-            "Token is valid.",
+            "Session is valid.",
             {
-                "payload": payload,
-                "user": self._safe_user(user),
+                "session": session,
+                "user": safe_user,
             },
         )
+
+    def validate_token(self, token: str) -> Dict:
+        # Backward-compatible name: token now means session_id.
+        return self.validate_session(token)
 
     def change_password(
         self,
@@ -160,8 +163,8 @@ class AuthService:
             },
         )
 
-    def get_current_user(self, token: str) -> Dict:
-        result = self.validate_token(token)
+    def get_current_user(self, session_id: str) -> Dict:
+        result = self.validate_session(session_id)
 
         if not result["success"]:
             return result

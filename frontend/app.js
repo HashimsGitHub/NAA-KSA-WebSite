@@ -1,13 +1,13 @@
 const api = '/api';
-let token = localStorage.getItem('naa_token') || '';
+let sessionId = localStorage.getItem('naa_session_id') || '';
 let currentUser = JSON.parse(localStorage.getItem('naa_user') || 'null');
 
 function authHeaders() {
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return sessionId ? { 'X-Session-Id': sessionId } : {};
 }
 
 function isLoggedIn() {
-  return Boolean(token && currentUser);
+  return Boolean(sessionId && currentUser);
 }
 
 async function request(path, options = {}) {
@@ -48,18 +48,12 @@ async function login() {
   loginStatus.textContent = data.message || '';
 
   if (data.success) {
-    token = data?.data?.token || '';
+    sessionId = data?.data?.session_id || data?.data?.token || '';
+    currentUser = data?.data?.user || { email: email.value, role: 'alumni', full_name: email.value };
 
-    const payload = JSON.parse(atob(token.split('.')[1]));
-
-    currentUser = data?.data?.user || {
-      email: payload.sub,
-      role: payload.role,
-      full_name: payload.sub
-    };
-
-    localStorage.setItem('naa_token', token);
+    localStorage.setItem('naa_session_id', sessionId);
     localStorage.setItem('naa_user', JSON.stringify(currentUser));
+    localStorage.removeItem('naa_token');
 
     renderAccessState();
     await loadPrivateContent();
@@ -68,8 +62,9 @@ async function login() {
 }
 
 function logout() {
-  token = '';
+  sessionId = '';
   currentUser = null;
+  localStorage.removeItem('naa_session_id');
   localStorage.removeItem('naa_token');
   localStorage.removeItem('naa_user');
   renderAccessState();

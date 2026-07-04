@@ -1,38 +1,15 @@
 import json
 from typing import Any, Dict, Iterable, Optional
-from shared.jwt_utils import extract_bearer_token, verify_token, verify_token_debug
 
 import azure.functions as func
-'''
-try:
-    from repositories.alumni_repository import AlumniRepository
-    from repositories.content_repository import ContentRepository
-    from repositories.user_repository import UserRepository
-    from services.auth_service import AuthService
-    from services.media_service import MediaService
-    from shared.config import ROLE_ADMIN, ROLE_ALUMNI, ROLE_CONTRIBUTOR, STATUS_APPROVED
-    from shared.jwt_utils import extract_bearer_token, verify_token
-    from shared.password_utils import hash_password
-except ModuleNotFoundError:
-    from repositories.alumni_repository import AlumniRepository
-    from repositories.content_repository import ContentRepository
-    from repositories.user_repository import UserRepository
-    from services.auth_service import AuthService
-    from services.media_service import MediaService
-    from shared.config import ROLE_ADMIN, ROLE_ALUMNI, ROLE_CONTRIBUTOR, STATUS_APPROVED
-    from shared.jwt_utils import extract_bearer_token, verify_token
-    from shared.password_utils import hash_password
-
-app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
-'''
 
 from repositories.alumni_repository import AlumniRepository
 from repositories.content_repository import ContentRepository
 from repositories.user_repository import UserRepository
+from repositories.session_repository import SessionRepository
 from services.auth_service import AuthService
 from services.media_service import MediaService
 from shared.config import ROLE_ADMIN, ROLE_ALUMNI, ROLE_CONTRIBUTOR, STATUS_APPROVED
-from shared.jwt_utils import extract_bearer_token, verify_token
 from shared.password_utils import hash_password
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
@@ -48,12 +25,58 @@ def body(req: func.HttpRequest) -> Dict[str, Any]:
         return {}
 
 
-def current_user(req: func.HttpRequest) -> Dict:
+def _safe_user(user: Dict) -> Dict:
+    safe = dict(user or {})
+    safe.pop("password_hash", None)
+    safe.pop("PartitionKey", None)
+    safe.pop("RowKey", None)
+    return safe
+
+
+def _session_id_from_request(req: func.HttpRequest) -> str:
+    # Preferred KISS auth header used by the frontend.
+    session_id = (
+        req.headers.get("X-Session-Id")
+        or req.headers.get("x-session-id")
+        or req.params.get("session_id")
+        or ""
+    ).strip()
+
+    if session_id:
+        return session_id
+
+    # Backward-compatible support for Authorization: Session <id> or Bearer <id>.
     auth_header = req.headers.get("Authorization") or req.headers.get("authorization") or ""
-    token = extract_bearer_token(auth_header)
-    if not token:
+    parts = auth_header.strip().split()
+    if len(parts) == 2 and parts[0].lower() in {"session", "bearer"}:
+        return parts[1].strip()
+
+    return ""
+
+
+def current_user(req: func.HttpRequest) -> Dict:
+    session_id = _session_id_from_request(req)
+    if not session_id:
         return {}
-    return verify_token(token) or {}
+
+    sessions = SessionRepository()
+    if not sessions.is_session_valid(session_id):
+        return {}
+
+    session = sessions.get_session(session_id)
+    if not session:
+        return {}
+
+    user = UserRepository().get_user_by_email(session.get("email", ""))
+    if not user or user.get("status") != STATUS_APPROVED:
+        return {}
+
+    safe = _safe_user(user)
+    safe["sub"] = safe.get("email", session.get("email", ""))
+    safe["session_id"] = session_id
+    safe["role"] = safe.get("role", session.get("role", ""))
+    safe["user_id"] = safe.get("user_id", session.get("user_id", ""))
+    return safe
 
 
 def require_login(req: func.HttpRequest) -> Dict:
@@ -88,12 +111,10 @@ def login(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="auth/me", methods=["GET"])
 def me(req: func.HttpRequest) -> func.HttpResponse:
-    auth_header = req.headers.get("Authorization") or req.headers.get("authorization") or ""
-    token = extract_bearer_token(auth_header)
-    if not token:
-        return json_response({"success": False, "message": "Login required"}, 401)
-    result = AuthService().get_current_user(token)
-    return json_response(result, 200 if result.get("success") else 401)
+    user = current_user(req)
+    if not user:
+        return json_response({"success": False, "message": "Login required", "data": None}, 401)
+    return json_response({"success": True, "message": "Current user retrieved.", "data": user})
 
 
 @app.route(route="users", methods=["GET", "POST"])
@@ -229,22 +250,3 @@ def media_upload(req: func.HttpRequest) -> func.HttpResponse:
         return forbidden(str(e), str(e) == "Login required")
     except Exception as e:
         return json_response({"success": False, "message": str(e)}, 400)
-
-@app.route(route="auth/debug-token", methods=["GET"])
-def debug_token(req: func.HttpRequest) -> func.HttpResponse:
-    auth_header = req.headers.get("Authorization") or req.headers.get("authorization") or ""
-    token = extract_bearer_token(auth_header)
-
-    if not token:
-        return json_response({"success": False, "message": "No token found"}, 401)
-
-    result = verify_token_debug(token)
-
-    return json_response({
-        "success": result["valid"],
-        "auth_header_found": bool(auth_header),
-        "token_length": len(token),
-        "decoded": result["decoded"],
-        "error_type": result["error_type"],
-        "error": result["error"],
-    }, 200 if result["valid"] else 401)
