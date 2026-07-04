@@ -169,39 +169,62 @@ async function fileToBase64(file) {
 
 async function uploadSelectedImage(file, target) {
   if (!file) return '';
-  const uploaded = await request('/upload', {
+
+  const uploaded = await request('/media/upload', {
     method: 'POST',
-    body: JSON.stringify({ target, file_name: file.name, content_base64: await fileToBase64(file) })
+    body: JSON.stringify({
+      target,
+      file_name: file.name,
+      content_base64: await fileToBase64(file)
+    })
   });
+
   if (!uploaded.success) throw new Error(uploaded.message || 'Image upload failed.');
+
   return uploaded.data.url;
 }
 
 async function createContent() {
   try {
     el('adminStatus').textContent = 'Saving...';
-    const type = el('newType').value;
-    const cover_image_url = await uploadSelectedImage(el('newImage').files[0], type);
-    const data = await request(type === 'events' ? '/events' : '/knowledge', {
+
+    const type = el('newType').value; // expected: "events" or "knowledge"
+    const isEvent = type === 'events';
+
+    const cover_image_url = await uploadSelectedImage(
+      el('newImage').files[0],
+      isEvent ? 'event' : 'knowledge'
+    );
+
+    const data = await request(isEvent ? '/events' : '/knowledge', {
       method: 'POST',
       body: JSON.stringify({
         title: el('newTitle').value,
         summary: el('newSummary').value,
         body: el('newBody').value,
         event_date: el('newEventDate').value,
-        cover_image_url,
+        cover_image_url: cover_image_url || '',
+        category: isEvent ? 'event' : 'knowledge',
         status: 'published'
       })
     });
+
     el('adminStatus').textContent = data.message || (data.success ? 'Created.' : 'Failed.');
+
     if (data.success) {
-      ['newTitle', 'newSummary', 'newBody', 'newEventDate'].forEach((id) => { el(id).value = ''; });
+      ['newTitle', 'newSummary', 'newBody', 'newEventDate'].forEach((id) => {
+        el(id).value = '';
+      });
       el('newImage').value = '';
+
       await loadEvents();
-      await loadKnowledge();
+
+      if (isLoggedIn()) {
+        await loadKnowledge();
+      }
     }
   } catch (err) {
-    el('adminStatus').textContent = err.message;
+    el('adminStatus').textContent = err.message || 'Failed to create content.';
   }
 }
 
