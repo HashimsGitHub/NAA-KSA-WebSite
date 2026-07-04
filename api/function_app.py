@@ -3,17 +3,26 @@ from typing import Any, Dict, Iterable, Optional
 
 import azure.functions as func
 
-from api.repositories.alumni_repository import AlumniRepository
-from api.repositories.content_repository import ContentRepository
-from api.repositories.user_repository import UserRepository
-from api.services.auth_service import AuthService
-from api.services.media_service import MediaService
-from api.shared.config import ROLE_ADMIN, ROLE_ALUMNI, ROLE_CONTRIBUTOR, STATUS_APPROVED
-from api.shared.jwt_utils import extract_bearer_token, verify_token
-from api.shared.password_utils import hash_password
+try:
+    from api.repositories.alumni_repository import AlumniRepository
+    from api.repositories.content_repository import ContentRepository
+    from api.repositories.user_repository import UserRepository
+    from api.services.auth_service import AuthService
+    from api.services.media_service import MediaService
+    from api.shared.config import ROLE_ADMIN, ROLE_ALUMNI, ROLE_CONTRIBUTOR, STATUS_APPROVED
+    from api.shared.jwt_utils import extract_bearer_token, verify_token
+    from api.shared.password_utils import hash_password
+except ModuleNotFoundError:
+    from repositories.alumni_repository import AlumniRepository
+    from repositories.content_repository import ContentRepository
+    from repositories.user_repository import UserRepository
+    from services.auth_service import AuthService
+    from services.media_service import MediaService
+    from shared.config import ROLE_ADMIN, ROLE_ALUMNI, ROLE_CONTRIBUTOR, STATUS_APPROVED
+    from shared.jwt_utils import extract_bearer_token, verify_token
+    from shared.password_utils import hash_password
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
-
 
 def json_response(payload: Dict, status: int = 200) -> func.HttpResponse:
     return func.HttpResponse(json.dumps(payload, default=str), status_code=status, mimetype="application/json")
