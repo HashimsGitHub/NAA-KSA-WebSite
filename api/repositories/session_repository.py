@@ -6,10 +6,13 @@ from azure.core.exceptions import ResourceNotFoundError
 
 from api.shared.storage_client import StorageClient
 
+from api.shared.config import TABLES
 
-UNIVERSITY_ID = "NUST-KSA"
-SESSION_TABLE = "Sessions"
+from api.shared.config import UNIVERSITY_ID
 
+#UNIVERSITY_ID = "NUST-KSA"
+
+SESSION_TABLE = TABLES["sessions"]
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
