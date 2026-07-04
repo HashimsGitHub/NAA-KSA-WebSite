@@ -48,7 +48,8 @@ def body(req: func.HttpRequest) -> Dict[str, Any]:
 
 
 def current_user(req: func.HttpRequest) -> Dict:
-    token = extract_bearer_token(req.headers.get("Authorization", ""))
+    auth_header = req.headers.get("Authorization") or req.headers.get("authorization") or ""
+    token = extract_bearer_token(auth_header)
     if not token:
         return {}
     return verify_token(token) or {}
@@ -86,7 +87,8 @@ def login(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="auth/me", methods=["GET"])
 def me(req: func.HttpRequest) -> func.HttpResponse:
-    token = extract_bearer_token(req.headers.get("Authorization", ""))
+    auth_header = req.headers.get("Authorization") or req.headers.get("authorization") or ""
+    token = extract_bearer_token(auth_header)
     if not token:
         return json_response({"success": False, "message": "Login required"}, 401)
     result = AuthService().get_current_user(token)

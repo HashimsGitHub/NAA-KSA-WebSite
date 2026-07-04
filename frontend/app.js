@@ -147,6 +147,7 @@ async function loadPrivateContent() {
   await loadAlumni();
   await loadKnowledge();
 }
+
 function renderContent(items) {
   return items.map(x => `
     <article class="item">
