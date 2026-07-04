@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, Iterable, Optional
 
 import azure.functions as func
 
@@ -8,7 +8,7 @@ from api.repositories.content_repository import ContentRepository
 from api.repositories.user_repository import UserRepository
 from api.services.auth_service import AuthService
 from api.services.media_service import MediaService
-from api.shared.config import ROLE_ADMIN, ROLE_CONTRIBUTOR, STATUS_APPROVED
+from api.shared.config import ROLE_ADMIN, ROLE_ALUMNI, ROLE_CONTRIBUTOR, STATUS_APPROVED
 from api.shared.jwt_utils import extract_bearer_token, verify_token
 from api.shared.password_utils import hash_password
 
@@ -33,13 +33,22 @@ def current_user(req: func.HttpRequest) -> Dict:
     return verify_token(token) or {}
 
 
-def require_role(req: func.HttpRequest, allowed: Iterable[str]) -> Dict:
+def require_login(req: func.HttpRequest) -> Dict:
     user = current_user(req)
     if not user:
         raise PermissionError("Login required")
+    return user
+
+
+def require_role(req: func.HttpRequest, allowed: Iterable[str]) -> Dict:
+    user = require_login(req)
     if user.get("role") not in allowed:
         raise PermissionError("Role not allowed")
     return user
+
+
+def forbidden(message: str, login_required: bool = False) -> func.HttpResponse:
+    return json_response({"success": False, "message": message}, 401 if login_required else 403)
 
 
 @app.route(route="health", methods=["GET"])
@@ -66,26 +75,22 @@ def me(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="users", methods=["GET", "POST"])
 def users(req: func.HttpRequest) -> func.HttpResponse:
     repo = UserRepository()
-    if req.method == "GET":
-        try:
-            require_role(req, [ROLE_ADMIN])
+    try:
+        require_role(req, [ROLE_ADMIN])
+        if req.method == "GET":
             rows = repo.list_users()
             for row in rows:
                 row.pop("password_hash", None)
                 row.pop("PartitionKey", None)
                 row.pop("RowKey", None)
             return json_response({"success": True, "data": rows})
-        except PermissionError as e:
-            return json_response({"success": False, "message": str(e)}, 403)
 
-    data = body(req)
-    try:
-        require_role(req, [ROLE_ADMIN])
+        data = body(req)
         user = repo.create_user(
             email=data.get("email", ""),
             full_name=data.get("full_name", ""),
             mobile=data.get("mobile", ""),
-            role=data.get("role", "alumni"),
+            role=data.get("role", ROLE_ALUMNI),
             status=data.get("status", STATUS_APPROVED),
             password_hash=hash_password(data.get("password", "ChangeMe123!")),
             linked_alumni_id=data.get("linked_alumni_id", ""),
@@ -93,7 +98,7 @@ def users(req: func.HttpRequest) -> func.HttpResponse:
         user.pop("password_hash", None)
         return json_response({"success": True, "data": user}, 201)
     except PermissionError as e:
-        return json_response({"success": False, "message": str(e)}, 403)
+        return forbidden(str(e), str(e) == "Login required")
     except Exception as e:
         return json_response({"success": False, "message": str(e)}, 400)
 
@@ -101,26 +106,27 @@ def users(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="alumni", methods=["GET", "POST"])
 def alumni(req: func.HttpRequest) -> func.HttpResponse:
     repo = AlumniRepository()
-    if req.method == "GET":
-        params = req.params
-        rows = repo.search_public_profiles(
-            name=params.get("name", ""),
-            city=params.get("city", ""),
-            country=params.get("country", ""),
-            degree=params.get("degree", ""),
-            department=params.get("department", ""),
-            graduation_year=params.get("graduation_year", ""),
-            company=params.get("company", ""),
-            industry=params.get("industry", ""),
-            skills=params.get("skills", ""),
-        )
-        return json_response({"success": True, "data": rows})
-
     try:
+        if req.method == "GET":
+            require_login(req)
+            params = req.params
+            rows = repo.search_public_profiles(
+                name=params.get("name", ""),
+                city=params.get("city", ""),
+                country=params.get("country", ""),
+                degree=params.get("degree", ""),
+                department=params.get("department", ""),
+                graduation_year=params.get("graduation_year", ""),
+                company=params.get("company", ""),
+                industry=params.get("industry", ""),
+                skills=params.get("skills", ""),
+            )
+            return json_response({"success": True, "data": rows})
+
         require_role(req, [ROLE_ADMIN])
         return json_response({"success": True, "data": repo.create_profile(body(req))}, 201)
     except PermissionError as e:
-        return json_response({"success": False, "message": str(e)}, 403)
+        return forbidden(str(e), str(e) == "Login required")
     except Exception as e:
         return json_response({"success": False, "message": str(e)}, 400)
 
@@ -135,39 +141,59 @@ def alumni_item(req: func.HttpRequest) -> func.HttpResponse:
             return json_response({"success": repo.delete_profile(alumni_id)})
         return json_response({"success": True, "data": repo.update_profile(alumni_id, body(req))})
     except PermissionError as e:
-        return json_response({"success": False, "message": str(e)}, 403)
+        return forbidden(str(e), str(e) == "Login required")
     except Exception as e:
         return json_response({"success": False, "message": str(e)}, 400)
 
 
-def content_endpoint(req: func.HttpRequest, table_key: str, allowed_create_roles) -> func.HttpResponse:
+def content_endpoint(
+    req: func.HttpRequest,
+    table_key: str,
+    allowed_create_roles: Iterable[str],
+    public_read: bool = False,
+    default_category: Optional[str] = None,
+) -> func.HttpResponse:
     repo = ContentRepository(table_key)
-    if req.method == "GET":
-        category = req.params.get("category", "")
-        return json_response({"success": True, "data": repo.list(published_only=True, category=category)})
     try:
+        if req.method == "GET":
+            if not public_read:
+                require_login(req)
+            category = req.params.get("category", default_category or "")
+            return json_response({"success": True, "data": repo.list(published_only=True, category=category)})
+
         user = require_role(req, allowed_create_roles)
-        return json_response({"success": True, "data": repo.create(body(req), user.get("sub", ""))}, 201)
+        payload = body(req)
+        if default_category and not payload.get("category"):
+            payload["category"] = default_category
+        return json_response({"success": True, "data": repo.create(payload, user.get("sub", ""))}, 201)
     except PermissionError as e:
-        return json_response({"success": False, "message": str(e)}, 403)
+        return forbidden(str(e), str(e) == "Login required")
     except Exception as e:
         return json_response({"success": False, "message": str(e)}, 400)
-
-
-@app.route(route="blogs", methods=["GET", "POST"])
-def blogs(req: func.HttpRequest) -> func.HttpResponse:
-    return content_endpoint(req, "blogs", [ROLE_ADMIN, ROLE_CONTRIBUTOR])
 
 
 @app.route(route="events", methods=["GET", "POST"])
 def events(req: func.HttpRequest) -> func.HttpResponse:
-    return content_endpoint(req, "events", [ROLE_ADMIN, ROLE_CONTRIBUTOR])
+    # Public GET. Create still requires admin/contributor.
+    return content_endpoint(req, "events", [ROLE_ADMIN, ROLE_CONTRIBUTOR], public_read=True, default_category="event")
+
+
+@app.route(route="knowledge", methods=["GET", "POST"])
+def knowledge(req: func.HttpRequest) -> func.HttpResponse:
+    # Knowledge Base requires login even for reading.
+    return content_endpoint(req, "blogs", [ROLE_ADMIN, ROLE_CONTRIBUTOR], public_read=False, default_category="knowledge")
+
+
+@app.route(route="blogs", methods=["GET", "POST"])
+def blogs(req: func.HttpRequest) -> func.HttpResponse:
+    # Backward-compatible alias. Blogs are treated as Knowledge Base and require login.
+    return knowledge(req)
 
 
 @app.route(route="media/upload", methods=["POST"])
 def media_upload(req: func.HttpRequest) -> func.HttpResponse:
     try:
-        require_role(req, [ROLE_ADMIN, ROLE_CONTRIBUTOR, "alumni"])
+        require_role(req, [ROLE_ADMIN, ROLE_CONTRIBUTOR, ROLE_ALUMNI])
         data = body(req)
         result = MediaService().upload_image_base64(
             data.get("target", "profile"),
@@ -176,6 +202,6 @@ def media_upload(req: func.HttpRequest) -> func.HttpResponse:
         )
         return json_response({"success": True, "data": result}, 201)
     except PermissionError as e:
-        return json_response({"success": False, "message": str(e)}, 403)
+        return forbidden(str(e), str(e) == "Login required")
     except Exception as e:
         return json_response({"success": False, "message": str(e)}, 400)

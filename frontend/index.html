@@ -21,7 +21,7 @@
 
   <main>
     <section id="login" class="card">
-      <h2>Login</h2>
+      <h2>Member Login</h2>
       <div class="grid">
         <input id="email" type="email" placeholder="Email" />
         <input id="password" type="password" placeholder="Password" />
@@ -30,9 +30,16 @@
       <p id="loginStatus"></p>
     </section>
 
+    <section id="userBox" class="card hidden">
+      <h2>Logged In</h2>
+      <p id="userSummary"></p>
+      <button onclick="logout()">Logout</button>
+    </section>
+
     <section id="alumni" class="card">
       <h2>Alumni Search</h2>
-      <div class="grid">
+      <p class="notice">Alumni search is available after login.</p>
+      <div id="alumniSearchBox" class="grid hidden">
         <input id="qName" placeholder="Name" />
         <input id="qCity" placeholder="City" />
         <input id="qCompany" placeholder="Company" />
@@ -49,12 +56,13 @@
 
     <section id="knowledge" class="card">
       <h2>Knowledge Base</h2>
-      <div id="blogList" class="cards"></div>
+      <p class="notice">Knowledge Base is for logged-in members only.</p>
+      <div id="knowledgeList" class="cards"></div>
     </section>
 
     <section id="adminPanel" class="card hidden">
       <h2>Admin / Contributor Panel</h2>
-      <p>Admins can add alumni and users. Admins and contributors can add blog/event posts.</p>
+      <p>Admins can add alumni and users. Admins and contributors can add events and knowledge-base posts.</p>
       <div class="grid">
         <input id="newTitle" placeholder="Post title" />
         <select id="newType"><option value="blogs">Knowledge Base</option><option value="events">Event</option></select>
