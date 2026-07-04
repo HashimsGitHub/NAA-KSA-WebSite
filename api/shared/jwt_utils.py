@@ -66,7 +66,7 @@ def decode_token(token: str) -> Dict:
         token,
         get_jwt_secret(),
         algorithms=[JWT_ALGORITHM],
-        issuer=APPLICATION_NAME,
+        options={"verify_iss": False},
     )
 
 
