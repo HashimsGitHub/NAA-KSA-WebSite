@@ -1,5 +1,6 @@
 import json
 from typing import Any, Dict, Iterable, Optional
+from shared.jwt_utils import extract_bearer_token, verify_token, verify_token_debug
 
 import azure.functions as func
 '''
@@ -237,11 +238,13 @@ def debug_token(req: func.HttpRequest) -> func.HttpResponse:
     if not token:
         return json_response({"success": False, "message": "No token found"}, 401)
 
-    decoded = verify_token(token)
+    result = verify_token_debug(token)
 
     return json_response({
-        "success": bool(decoded),
+        "success": result["valid"],
         "auth_header_found": bool(auth_header),
         "token_length": len(token),
-        "decoded": decoded or {}
-    }, 200 if decoded else 401)
+        "decoded": result["decoded"],
+        "error_type": result["error_type"],
+        "error": result["error"],
+    }, 200 if result["valid"] else 401)

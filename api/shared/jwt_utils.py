@@ -91,3 +91,20 @@ def extract_bearer_token(authorization_header: str) -> Optional[str]:
         return None
 
     return parts[1]
+
+def verify_token_debug(token: str) -> Dict:
+    try:
+        decoded = decode_token(token)
+        return {
+            "valid": True,
+            "decoded": decoded,
+            "error_type": "",
+            "error": "",
+        }
+    except Exception as e:
+        return {
+            "valid": False,
+            "decoded": {},
+            "error_type": type(e).__name__,
+            "error": str(e),
+        }
