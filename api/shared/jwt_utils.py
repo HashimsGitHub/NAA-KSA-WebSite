@@ -73,9 +73,8 @@ def decode_token(token: str) -> Dict:
 def verify_token(token: str) -> Optional[Dict]:
     try:
         return decode_token(token)
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
+    except Exception as e:
+        print(f"JWT verification failed: {type(e).__name__}: {e}")
         return None
 
 

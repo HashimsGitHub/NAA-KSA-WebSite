@@ -228,3 +228,20 @@ def media_upload(req: func.HttpRequest) -> func.HttpResponse:
         return forbidden(str(e), str(e) == "Login required")
     except Exception as e:
         return json_response({"success": False, "message": str(e)}, 400)
+
+@app.route(route="auth/debug-token", methods=["GET"])
+def debug_token(req: func.HttpRequest) -> func.HttpResponse:
+    auth_header = req.headers.get("Authorization") or req.headers.get("authorization") or ""
+    token = extract_bearer_token(auth_header)
+
+    if not token:
+        return json_response({"success": False, "message": "No token found"}, 401)
+
+    decoded = verify_token(token)
+
+    return json_response({
+        "success": bool(decoded),
+        "auth_header_found": bool(auth_header),
+        "token_length": len(token),
+        "decoded": decoded or {}
+    }, 200 if decoded else 401)
