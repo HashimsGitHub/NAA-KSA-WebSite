@@ -48,10 +48,6 @@ class AuthService:
             user_agent=user_agent,
         )
 
-        # KISS: use Azure Table session_id as the auth token.
-        # No JWT signing/verification required for this prototype.
-        token = session["session_id"]
-
         self.users.update_last_login(email)
 
         safe_user = self._safe_user(user)
@@ -59,7 +55,7 @@ class AuthService:
         return success_response(
             "Login successful.",
             {
-                "token": token,
+                "token": session["session_id"],
                 "session_id": session["session_id"],
                 "user": safe_user,
             },
@@ -74,6 +70,8 @@ class AuthService:
         return success_response("Logout successful.")
 
     def validate_session(self, session_id: str) -> Dict:
+        session_id = (session_id or "").strip()
+
         if not session_id:
             return error_response("Session is required.")
 
@@ -92,19 +90,16 @@ class AuthService:
         if user.get("status") != STATUS_APPROVED:
             return error_response("User account is not approved.")
 
-        safe_user = self._safe_user(user)
-        safe_user["session_id"] = session_id
-
         return success_response(
             "Session is valid.",
             {
                 "session": session,
-                "user": safe_user,
+                "user": self._safe_user(user),
             },
         )
 
     def validate_token(self, token: str) -> Dict:
-        # Backward-compatible name: token now means session_id.
+        # Backward-compatible name. In the KISS prototype, token == session_id.
         return self.validate_session(token)
 
     def change_password(
@@ -163,7 +158,7 @@ class AuthService:
             },
         )
 
-    def get_current_user(self, session_id: str) -> Dict:
+    def get_current_user_by_session(self, session_id: str) -> Dict:
         result = self.validate_session(session_id)
 
         if not result["success"]:
@@ -173,6 +168,10 @@ class AuthService:
             "Current user retrieved.",
             result["data"]["user"],
         )
+
+    def get_current_user(self, token: str) -> Dict:
+        # Backward-compatible name. In the KISS prototype, token == session_id.
+        return self.get_current_user_by_session(token)
 
     def _safe_user(self, user: Dict) -> Dict:
         safe = dict(user)

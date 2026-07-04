@@ -39,6 +39,11 @@ function escapeHtml(value = '') {
   }[char]));
 }
 
+function formValue(id) {
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : '';
+}
+
 async function login() {
   const data = await request('/auth/login', {
     method: 'POST',
@@ -77,6 +82,7 @@ function renderAccessState() {
   loginBox.classList.toggle('hidden', loggedIn);
   userBox.classList.toggle('hidden', !loggedIn);
   adminPanel.classList.toggle('hidden', !(role === 'admin' || role === 'contributor'));
+  alumniAdminPanel.classList.toggle('hidden', role !== 'admin');
   alumniSearchBox.classList.toggle('hidden', !loggedIn);
 
   userSummary.textContent = loggedIn ? `${currentUser.full_name || currentUser.email} (${role})` : '';
@@ -94,10 +100,13 @@ async function loadAlumni() {
   }
 
   const params = new URLSearchParams({
-    name: qName.value,
-    city: qCity.value,
-    company: qCompany.value,
-    skills: qSkills.value
+    name: formValue('qName'),
+    graduation_year: formValue('qGraduationYear'),
+    department: formValue('qDepartment'),
+    country: formValue('qCountry'),
+    city: formValue('qCity'),
+    company: formValue('qCompany'),
+    skills: formValue('qSkills')
   });
 
   const data = await request(`/alumni?${params.toString()}`);
@@ -111,6 +120,7 @@ async function loadAlumni() {
       ${a.profile_image_url ? `<img src="${escapeHtml(a.profile_image_url)}" alt="${escapeHtml(a.full_name)}">` : ''}
       <h3>${escapeHtml(a.full_name || 'Unnamed Alumni')}</h3>
       <span class="badge">${escapeHtml(a.graduation_year || 'Alumni')}</span>
+      <p>${escapeHtml([a.degree, a.department].filter(Boolean).join(' - '))}</p>
       <p>${escapeHtml([a.current_position, a.current_company].filter(Boolean).join(' at '))}</p>
       <p>${escapeHtml([a.city, a.country].filter(Boolean).join(', '))}</p>
       <p>${escapeHtml(a.skills || '')}</p>
@@ -163,51 +173,88 @@ async function fileToBase64(file) {
   });
 }
 
-async function createContent() {
-  let cover_image_url = '';
-  const file = newImage.files[0];
-  const type = newType.value;
-
-  adminStatus.textContent = 'Saving...';
-
-  if (file) {
-    const uploaded = await request('/media/upload', {
-      method: 'POST',
-      body: JSON.stringify({
-        target: type === 'events' ? 'event' : 'blog',
-        file_name: file.name,
-        content_base64: await fileToBase64(file)
-      })
-    });
-    if (!uploaded.success) {
-      adminStatus.textContent = uploaded.message || 'Image upload failed.';
-      return;
-    }
-    cover_image_url = uploaded.data.url;
-  }
-
-  const created = await request(`/${type === 'events' ? 'events' : 'knowledge'}`, {
+async function uploadImage(file, target) {
+  if (!file) return '';
+  const uploaded = await request('/media/upload', {
     method: 'POST',
     body: JSON.stringify({
-      title: newTitle.value,
-      summary: newSummary.value,
-      body: newBody.value,
-      event_date: newEventDate.value,
-      cover_image_url,
-      status: 'published',
-      category: type === 'events' ? 'event' : 'knowledge'
+      target,
+      file_name: file.name,
+      content_base64: await fileToBase64(file)
     })
   });
+  if (!uploaded.success) throw new Error(uploaded.message || 'Image upload failed.');
+  return uploaded.data.url;
+}
 
-  adminStatus.textContent = created.message || (created.success ? 'Created.' : 'Failed.');
-  if (created.success) {
-    newTitle.value = '';
-    newSummary.value = '';
-    newBody.value = '';
-    newEventDate.value = '';
-    newImage.value = '';
-    await loadEvents();
-    await loadKnowledge();
+async function createContent() {
+  const type = newType.value;
+  adminStatus.textContent = 'Saving...';
+
+  try {
+    const cover_image_url = await uploadImage(newImage.files[0], type === 'events' ? 'event' : 'blog');
+    const created = await request(`/${type === 'events' ? 'events' : 'knowledge'}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        title: newTitle.value,
+        summary: newSummary.value,
+        body: newBody.value,
+        event_date: newEventDate.value,
+        cover_image_url,
+        status: 'published',
+        category: type === 'events' ? 'event' : 'knowledge'
+      })
+    });
+
+    adminStatus.textContent = created.message || (created.success ? 'Created.' : 'Failed.');
+    if (created.success) {
+      newTitle.value = '';
+      newSummary.value = '';
+      newBody.value = '';
+      newEventDate.value = '';
+      newImage.value = '';
+      await loadEvents();
+      await loadKnowledge();
+    }
+  } catch (err) {
+    adminStatus.textContent = err.message;
+  }
+}
+
+async function createAlumni() {
+  alumniAdminStatus.textContent = 'Saving alumni...';
+
+  try {
+    const profile_image_url = await uploadImage(alumniImage.files[0], 'profile');
+    const payload = {
+      full_name: alumniFullName.value,
+      email: alumniEmail.value,
+      city: alumniCity.value,
+      country: alumniCountry.value,
+      degree: alumniDegree.value,
+      department: alumniDepartment.value,
+      graduation_year: alumniGraduationYear.value,
+      current_company: alumniCompany.value,
+      current_position: alumniPosition.value,
+      skills: alumniSkills.value,
+      profile_image_url,
+      visibility: 'visible',
+      status: 'active'
+    };
+
+    const created = await request('/alumni', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    alumniAdminStatus.textContent = created.message || (created.success ? 'Alumni created.' : 'Failed.');
+    if (created.success) {
+      ['alumniFullName','alumniEmail','alumniCity','alumniCountry','alumniDegree','alumniDepartment','alumniGraduationYear','alumniCompany','alumniPosition','alumniSkills'].forEach(id => document.getElementById(id).value = '');
+      alumniImage.value = '';
+      await loadAlumni();
+    }
+  } catch (err) {
+    alumniAdminStatus.textContent = err.message;
   }
 }
 

@@ -5,8 +5,8 @@ import azure.functions as func
 
 from repositories.alumni_repository import AlumniRepository
 from repositories.content_repository import ContentRepository
-from repositories.user_repository import UserRepository
 from repositories.session_repository import SessionRepository
+from repositories.user_repository import UserRepository
 from services.auth_service import AuthService
 from services.media_service import MediaService
 from shared.config import ROLE_ADMIN, ROLE_ALUMNI, ROLE_CONTRIBUTOR, STATUS_APPROVED
@@ -25,58 +25,44 @@ def body(req: func.HttpRequest) -> Dict[str, Any]:
         return {}
 
 
-def _safe_user(user: Dict) -> Dict:
-    safe = dict(user or {})
-    safe.pop("password_hash", None)
-    safe.pop("PartitionKey", None)
-    safe.pop("RowKey", None)
-    return safe
-
-
-def _session_id_from_request(req: func.HttpRequest) -> str:
-    # Preferred KISS auth header used by the frontend.
+def get_session_id(req: func.HttpRequest) -> str:
     session_id = (
         req.headers.get("X-Session-Id")
         or req.headers.get("x-session-id")
-        or req.params.get("session_id")
+        or req.headers.get("Session-Id")
+        or req.headers.get("session-id")
         or ""
     ).strip()
 
     if session_id:
         return session_id
 
-    # Backward-compatible support for Authorization: Session <id> or Bearer <id>.
     auth_header = req.headers.get("Authorization") or req.headers.get("authorization") or ""
-    parts = auth_header.strip().split()
-    if len(parts) == 2 and parts[0].lower() in {"session", "bearer"}:
-        return parts[1].strip()
+    if auth_header.lower().startswith("session "):
+        return auth_header[8:].strip()
 
     return ""
 
 
 def current_user(req: func.HttpRequest) -> Dict:
-    session_id = _session_id_from_request(req)
+    session_id = get_session_id(req)
     if not session_id:
         return {}
 
     sessions = SessionRepository()
-    if not sessions.is_session_valid(session_id):
-        return {}
-
     session = sessions.get_session(session_id)
-    if not session:
+
+    if not session or not sessions.is_session_valid(session_id):
         return {}
 
-    user = UserRepository().get_user_by_email(session.get("email", ""))
-    if not user or user.get("status") != STATUS_APPROVED:
-        return {}
-
-    safe = _safe_user(user)
-    safe["sub"] = safe.get("email", session.get("email", ""))
-    safe["session_id"] = session_id
-    safe["role"] = safe.get("role", session.get("role", ""))
-    safe["user_id"] = safe.get("user_id", session.get("user_id", ""))
-    return safe
+    return {
+        "session_id": session.get("session_id", session_id),
+        "email": session.get("email", ""),
+        "sub": session.get("email", ""),
+        "user_id": session.get("user_id", ""),
+        "role": session.get("role", ""),
+        "status": session.get("status", ""),
+    }
 
 
 def require_login(req: func.HttpRequest) -> Dict:
@@ -111,10 +97,12 @@ def login(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="auth/me", methods=["GET"])
 def me(req: func.HttpRequest) -> func.HttpResponse:
-    user = current_user(req)
-    if not user:
-        return json_response({"success": False, "message": "Login required", "data": None}, 401)
-    return json_response({"success": True, "message": "Current user retrieved.", "data": user})
+    session = current_user(req)
+    if not session:
+        return json_response({"success": False, "message": "Login required"}, 401)
+
+    result = AuthService().get_current_user_by_session(session["session_id"])
+    return json_response(result, 200 if result.get("success") else 401)
 
 
 @app.route(route="users", methods=["GET", "POST"])
@@ -210,7 +198,7 @@ def content_endpoint(
         payload = body(req)
         if default_category and not payload.get("category"):
             payload["category"] = default_category
-        return json_response({"success": True, "data": repo.create(payload, user.get("sub", ""))}, 201)
+        return json_response({"success": True, "data": repo.create(payload, user.get("email", user.get("sub", "")))}, 201)
     except PermissionError as e:
         return forbidden(str(e), str(e) == "Login required")
     except Exception as e:

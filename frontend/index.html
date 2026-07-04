@@ -38,9 +38,11 @@
 
     <section id="alumni" class="card">
       <h2>Alumni Search</h2>
-      <p class="notice">Alumni search is available after login.</p>
       <div id="alumniSearchBox" class="grid hidden">
         <input id="qName" placeholder="Name" />
+        <input id="qGraduationYear" placeholder="Graduation Year" />
+        <input id="qDepartment" placeholder="Department" />
+        <input id="qCountry" placeholder="Country" />
         <input id="qCity" placeholder="City" />
         <input id="qCompany" placeholder="Company" />
         <input id="qSkills" placeholder="Skills" />
@@ -56,13 +58,12 @@
 
     <section id="knowledge" class="card">
       <h2>Knowledge Base</h2>
-      <p class="notice">Knowledge Base is for logged-in members only.</p>
       <div id="knowledgeList" class="cards"></div>
     </section>
 
     <section id="adminPanel" class="card hidden">
       <h2>Admin / Contributor Panel</h2>
-      <p>Admins can add alumni and users. Admins and contributors can add events and knowledge-base posts.</p>
+      <p>Admins and contributors can add events and knowledge-base posts.</p>
       <div class="grid">
         <input id="newTitle" placeholder="Post title" />
         <select id="newType"><option value="blogs">Knowledge Base</option><option value="events">Event</option></select>
@@ -73,6 +74,26 @@
         <button onclick="createContent()">Create Post</button>
       </div>
       <p id="adminStatus"></p>
+    </section>
+
+    <section id="alumniAdminPanel" class="card hidden">
+      <h2>Admin Alumni Manager</h2>
+      <p>Add one alumni profile. Bulk import comes later through the Colab/CSV importer.</p>
+      <div class="grid">
+        <input id="alumniFullName" placeholder="Full name" />
+        <input id="alumniEmail" type="email" placeholder="Email" />
+        <input id="alumniGraduationYear" placeholder="Graduation year" />
+        <input id="alumniDegree" placeholder="Degree" />
+        <input id="alumniDepartment" placeholder="Department" />
+        <input id="alumniCompany" placeholder="Current company" />
+        <input id="alumniPosition" placeholder="Current position" />
+        <input id="alumniCity" placeholder="City" />
+        <input id="alumniCountry" placeholder="Country" />
+        <input id="alumniSkills" placeholder="Skills" />
+        <input id="alumniImage" type="file" accept="image/*" />
+        <button onclick="createAlumni()">Create Alumni</button>
+      </div>
+      <p id="alumniAdminStatus"></p>
     </section>
   </main>
 
