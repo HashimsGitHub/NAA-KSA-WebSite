@@ -9,7 +9,7 @@ Author : Hashim Hilal
 
 from pathlib import Path
 import os
-
+import json
 
 # ==========================================================
 # Application
@@ -245,36 +245,23 @@ def get_container(name: str) -> str:
     return BLOB_CONTAINERS[name]
 
 
-import json
-from pathlib import Path
-import os
-
-
-def get_env(name: str, default=None):
-    """
-    Returns configuration from:
-        1. Environment Variables
-        2. api/local.settings.json
-        3. Default value
-    """
-
-    # Azure App Settings / Environment Variable
-    value = os.getenv(name)
-
-    if value:
-        return value
-
-    # Local Development
-    settings = API_ROOT / "local.settings.json"
-
-    if settings.exists():
-
-        with open(settings, "r") as f:
-            config = json.load(f)
-
-        values = config.get("Values", {})
-
-        if name in values:
-            return values[name]
-
-    return default
+def get_env(key: str) -> str:
+    # 1. ALWAYS check the live system environment variables first!
+    # This works automatically for Azure Production App Settings
+    if key in os.environ:
+        return os.environ[key]
+        
+    # 2. If not found in the live environment, try falling back to local files
+    try:
+        API_ROOT = Path(__file__).parents[1]
+        settings_path = API_ROOT / "local.settings.json"
+        
+        if settings_path.exists():
+            with open(settings_path, "r") as f:
+                data = json.load(f)
+                # Read from the "Values" dictionary block
+                return data.get("Values", {}).get(key)
+    except Exception:
+        pass # Fall through if file operations fail
+        
+    return None
