@@ -1,4 +1,4 @@
-from api.shared.user_repository import UserRepository
+from api.repositories.user_repository import UserRepository
 
 
 repo = UserRepository()
