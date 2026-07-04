@@ -1,0 +1,8 @@
+azure-functions
+azure-data-tables
+azure-storage-blob
+python-dotenv
+bcrypt
+PyJWT
+pandas
+openpyxl
