@@ -86,6 +86,18 @@ LOGIN_TOKEN_MINUTES = 10
 
 MAX_LOGIN_ATTEMPTS = 5
 
+# ==========================================================
+# Password Policy
+# ==========================================================
+
+PASSWORD_POLICY = {
+    "min_length": 10,
+    "require_uppercase": True,
+    "require_lowercase": True,
+    "require_digit": True,
+    "require_symbol": True,
+    "bcrypt_rounds": 12,
+}
 
 # ==========================================================
 # Media Upload Limits
