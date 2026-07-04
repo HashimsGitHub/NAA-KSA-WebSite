@@ -1,7 +1,9 @@
-local.settings.json
+api/local.settings.json
 .env
 __pycache__/
 *.pyc
 .venv/
 node_modules/
 .DS_Store
+api/local.settings.json
+local.settings.json

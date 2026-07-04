@@ -245,5 +245,36 @@ def get_container(name: str) -> str:
     return BLOB_CONTAINERS[name]
 
 
+import json
+from pathlib import Path
+import os
+
+
 def get_env(name: str, default=None):
-    return os.getenv(name, default)
+    """
+    Returns configuration from:
+        1. Environment Variables
+        2. api/local.settings.json
+        3. Default value
+    """
+
+    # Azure App Settings / Environment Variable
+    value = os.getenv(name)
+
+    if value:
+        return value
+
+    # Local Development
+    settings = API_ROOT / "local.settings.json"
+
+    if settings.exists():
+
+        with open(settings, "r") as f:
+            config = json.load(f)
+
+        values = config.get("Values", {})
+
+        if name in values:
+            return values[name]
+
+    return default
