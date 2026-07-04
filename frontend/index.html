@@ -10,90 +10,101 @@
   <header class="hero">
     <nav>
       <strong>NUST KSA Alumni</strong>
-      <a href="#alumni">Alumni</a>
       <a href="#events">Events</a>
-      <a href="#knowledge">Knowledge Base</a>
+      <a href="#about">About Us</a>
       <a href="#login">Login</a>
+      <a href="#alumni">Alumni</a>
+      <a href="#knowledge">Knowledge Base</a>
     </nav>
     <h1>Simple alumni portal for NUST KSA</h1>
-    <p>Search alumni, read knowledge posts, follow events, and manage content by role.</p>
+    <p>Public events, member-only alumni search, and knowledge sharing.</p>
   </header>
 
   <main>
-    <section id="login" class="card">
-      <h2>Member Login</h2>
-      <div class="grid">
-        <input id="email" type="email" placeholder="Email" />
-        <input id="password" type="password" placeholder="Password" />
-        <button onclick="login()">Login</button>
-      </div>
-      <p id="loginStatus"></p>
+    <section id="events" class="card">
+      <h2>Events</h2>
+      <p class="muted">Public events are visible to everyone.</p>
+      <div id="eventList" class="cards"></div>
     </section>
 
-    <section id="userBox" class="card hidden">
-      <h2>Logged In</h2>
-      <p id="userSummary"></p>
-      <button onclick="logout()">Logout</button>
+    <section id="about" class="card">
+      <h2>About Us</h2>
+      <p>NUST KSA Alumni Portal connects alumni, contributors, and administrators through a simple community website.</p>
+      <p>Members can search the alumni database and read knowledge-base articles after login. Contributors can publish events and knowledge posts. Admins maintain users and alumni records.</p>
+    </section>
+
+    <section id="login" class="card">
+      <h2>Member Login</h2>
+      <div id="loginBox" class="grid">
+        <input id="email" type="email" placeholder="Email" autocomplete="username" />
+        <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+        <button id="loginButton" type="button">Login</button>
+      </div>
+      <div id="userBox" class="hidden">
+        <p id="userSummary"></p>
+        <button id="logoutButton" type="button">Logout</button>
+      </div>
+      <p id="loginStatus" class="notice"></p>
     </section>
 
     <section id="alumni" class="card">
       <h2>Alumni Search</h2>
+      <p class="muted">Reader, Contributor and Admin users can search alumni after login.</p>
       <div id="alumniSearchBox" class="grid hidden">
         <input id="qName" placeholder="Name" />
         <input id="qGraduationYear" placeholder="Graduation Year" />
+        <input id="qDegree" placeholder="Degree" />
         <input id="qDepartment" placeholder="Department" />
-        <input id="qCountry" placeholder="Country" />
-        <input id="qCity" placeholder="City" />
         <input id="qCompany" placeholder="Company" />
-        <input id="qSkills" placeholder="Skills" />
-        <button onclick="loadAlumni()">Search</button>
+        <input id="qCountry" placeholder="Country" />
+        <button id="searchButton" type="button">Search</button>
       </div>
-      <div id="alumniList" class="cards"></div>
-    </section>
-
-    <section id="events" class="card">
-      <h2>Events</h2>
-      <div id="eventList" class="cards"></div>
+      <div id="alumniList" class="cards"><p class="notice">Login to search alumni.</p></div>
     </section>
 
     <section id="knowledge" class="card">
       <h2>Knowledge Base</h2>
-      <div id="knowledgeList" class="cards"></div>
+      <p class="muted">Knowledge Base is available after login.</p>
+      <div id="knowledgeList" class="cards"><p class="notice">Login to read the Knowledge Base.</p></div>
     </section>
 
     <section id="adminPanel" class="card hidden">
-      <h2>Admin / Contributor Panel</h2>
-      <p>Admins and contributors can add events and knowledge-base posts.</p>
+      <h2>Admin / Contributor</h2>
+      <p>Contributors can create Events and Knowledge posts. Admins can also create Alumni records.</p>
+
+      <h3>Create Event or Knowledge Post</h3>
       <div class="grid">
-        <input id="newTitle" placeholder="Post title" />
-        <select id="newType"><option value="blogs">Knowledge Base</option><option value="events">Event</option></select>
+        <select id="newType">
+          <option value="knowledge">Knowledge Base</option>
+          <option value="events">Event</option>
+        </select>
+        <input id="newTitle" placeholder="Title" />
         <input id="newSummary" placeholder="Summary" />
         <textarea id="newBody" placeholder="Body / description"></textarea>
         <input id="newEventDate" type="date" />
         <input id="newImage" type="file" accept="image/*" />
-        <button onclick="createContent()">Create Post</button>
+        <button id="createPostButton" type="button">Create Post</button>
       </div>
-      <p id="adminStatus"></p>
-    </section>
+      <p id="adminStatus" class="notice"></p>
 
-    <section id="alumniAdminPanel" class="card hidden">
-      <h2>Admin Alumni Manager</h2>
-      <p>Add one alumni profile. Bulk import comes later through the Colab/CSV importer.</p>
-      <div class="grid">
-        <input id="alumniFullName" placeholder="Full name" />
-        <input id="alumniEmail" type="email" placeholder="Email" />
-        <input id="alumniGraduationYear" placeholder="Graduation year" />
-        <input id="alumniDegree" placeholder="Degree" />
-        <input id="alumniDepartment" placeholder="Department" />
-        <input id="alumniCompany" placeholder="Current company" />
-        <input id="alumniPosition" placeholder="Current position" />
-        <input id="alumniCity" placeholder="City" />
-        <input id="alumniCountry" placeholder="Country" />
-        <input id="alumniSkills" placeholder="Skills" />
-        <input id="alumniImage" type="file" accept="image/*" />
-        <button onclick="createAlumni()">Create Alumni</button>
+      <div id="adminAlumniBox" class="hidden">
+        <h3>Create Alumni Profile</h3>
+        <div class="grid">
+          <input id="aFullName" placeholder="Full Name" />
+          <input id="aEmail" placeholder="Email" />
+          <input id="aGraduationYear" placeholder="Graduation Year" />
+          <input id="aDegree" placeholder="Degree" />
+          <input id="aDepartment" placeholder="Department" />
+          <input id="aCompany" placeholder="Current Company" />
+          <input id="aPosition" placeholder="Current Position" />
+          <input id="aCity" placeholder="City" />
+          <input id="aCountry" placeholder="Country" />
+          <input id="aSkills" placeholder="Skills" />
+          <textarea id="aBio" placeholder="Bio"></textarea>
+          <button id="createAlumniButton" type="button">Create Alumni</button>
+        </div>
+        <p id="alumniAdminStatus" class="notice"></p>
       </div>
-      <p id="alumniAdminStatus"></p>
     </section>
   </main>
 

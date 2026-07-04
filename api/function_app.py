@@ -1,21 +1,125 @@
+"""KISS backend for NUST KSA Alumni Portal.
+
+One Azure Static Web Apps managed API file.
+Storage: Azure Tables + Azure Blob Storage.
+Auth: simple random Session ID stored in Azure Table.
+"""
+
+import base64
 import json
-from typing import Any, Dict, Iterable, Optional
+import mimetypes
+import os
+import re
+import secrets
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional
+from uuid import uuid4
 
 import azure.functions as func
-
-from repositories.alumni_repository import AlumniRepository
-from repositories.content_repository import ContentRepository
-from repositories.session_repository import SessionRepository
-from repositories.user_repository import UserRepository
-from services.auth_service import AuthService
-from services.media_service import MediaService
-from shared.config import ROLE_ADMIN, ROLE_ALUMNI, ROLE_CONTRIBUTOR, STATUS_APPROVED
-from shared.password_utils import hash_password
+import bcrypt
+from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
+from azure.data.tables import TableServiceClient
+from azure.storage.blob import BlobServiceClient, ContentSettings
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
-def json_response(payload: Dict, status: int = 200) -> func.HttpResponse:
-    return func.HttpResponse(json.dumps(payload, default=str), status_code=status, mimetype="application/json")
+UNIVERSITY_ID = "NUST-KSA"
+SESSION_HOURS = 8
+
+TABLE_USERS = "UserAccounts"
+TABLE_SESSIONS = "Sessions"
+TABLE_ALUMNI = "AlumniProfiles"
+TABLE_EVENTS = "Events"
+TABLE_KNOWLEDGE = "BlogPosts"
+BLOB_IMAGES = "images"
+
+ROLE_ADMIN = "admin"
+ROLE_CONTRIBUTOR = "contributor"
+ROLE_READER = "reader"
+ROLE_ALUMNI = "alumni"  # backward-compatible existing seed role
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def utc_now_text() -> str:
+    return utc_now().isoformat()
+
+
+def clean(value: Any) -> str:
+    return "" if value is None else str(value).strip()
+
+
+def normalize_email(email: str) -> str:
+    return clean(email).lower()
+
+
+def read_local_setting(key: str) -> Optional[str]:
+    path = Path(__file__).resolve().parent / "local.settings.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        value = data.get("Values", {}).get(key)
+        return value if value else None
+    except Exception:
+        return None
+
+
+def get_setting(key: str) -> str:
+    value = os.environ.get(key) or read_local_setting(key)
+    if not value:
+        raise RuntimeError(f"Missing required setting: {key}")
+    return value
+
+
+def storage_connection() -> str:
+    return get_setting("AZURE_STORAGE_CONNECTION_STRING")
+
+
+_table_service: Optional[TableServiceClient] = None
+_blob_service: Optional[BlobServiceClient] = None
+
+
+def table_service() -> TableServiceClient:
+    global _table_service
+    if _table_service is None:
+        _table_service = TableServiceClient.from_connection_string(storage_connection())
+    return _table_service
+
+
+def blob_service() -> BlobServiceClient:
+    global _blob_service
+    if _blob_service is None:
+        _blob_service = BlobServiceClient.from_connection_string(storage_connection())
+    return _blob_service
+
+
+def table(name: str):
+    service = table_service()
+    try:
+        service.create_table(name)
+    except ResourceExistsError:
+        pass
+    return service.get_table_client(name)
+
+
+def json_response(payload: Dict[str, Any], status: int = 200) -> func.HttpResponse:
+    return func.HttpResponse(
+        json.dumps(payload, default=str),
+        status_code=status,
+        mimetype="application/json",
+    )
+
+
+def ok(data: Any = None, message: str = "OK", status: int = 200) -> func.HttpResponse:
+    return json_response({"success": True, "message": message, "data": data if data is not None else []}, status)
+
+
+def fail(message: str, status: int = 400) -> func.HttpResponse:
+    return json_response({"success": False, "message": message, "data": None}, status)
 
 
 def body(req: func.HttpRequest) -> Dict[str, Any]:
@@ -25,216 +129,413 @@ def body(req: func.HttpRequest) -> Dict[str, Any]:
         return {}
 
 
-def get_session_id(req: func.HttpRequest) -> str:
-    session_id = (
-        req.headers.get("X-Session-Id")
-        or req.headers.get("x-session-id")
-        or req.headers.get("Session-Id")
-        or req.headers.get("session-id")
-        or ""
-    ).strip()
+def remove_storage_keys(entity: Dict[str, Any]) -> Dict[str, Any]:
+    item = dict(entity)
+    item.pop("PartitionKey", None)
+    item.pop("RowKey", None)
+    item.pop("password_hash", None)
+    return item
 
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    if not password or not password_hash:
+        return False
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    except Exception:
+        return False
+
+
+def get_user(email: str) -> Optional[Dict[str, Any]]:
+    email = normalize_email(email)
+    if not email:
+        return None
+    try:
+        return dict(table(TABLE_USERS).get_entity(partition_key=UNIVERSITY_ID, row_key=email))
+    except ResourceNotFoundError:
+        return None
+
+
+def save_user(email: str, full_name: str, password: str, role: str = ROLE_READER, status: str = "approved") -> Dict[str, Any]:
+    email = normalize_email(email)
+    if not email or not password:
+        raise ValueError("Email and password are required.")
+    role = clean(role).lower() or ROLE_READER
+    if role == ROLE_ALUMNI:
+        role = ROLE_READER
+    entity = {
+        "PartitionKey": UNIVERSITY_ID,
+        "RowKey": email,
+        "user_id": str(uuid4()),
+        "email": email,
+        "full_name": clean(full_name) or email,
+        "role": role,
+        "status": clean(status) or "approved",
+        "password_hash": hash_password(password),
+        "created_at": utc_now_text(),
+        "updated_at": utc_now_text(),
+    }
+    table(TABLE_USERS).upsert_entity(entity)
+    return entity
+
+
+def create_session(user: Dict[str, Any], req: func.HttpRequest) -> Dict[str, Any]:
+    session_id = secrets.token_urlsafe(32)
+    role = clean(user.get("role") or ROLE_READER).lower()
+    if role == ROLE_ALUMNI:
+        role = ROLE_READER
+    entity = {
+        "PartitionKey": UNIVERSITY_ID,
+        "RowKey": session_id,
+        "session_id": session_id,
+        "email": normalize_email(user.get("email") or user.get("RowKey")),
+        "user_id": clean(user.get("user_id")),
+        "full_name": clean(user.get("full_name")),
+        "role": role,
+        "status": clean(user.get("status") or "approved"),
+        "created_at": utc_now_text(),
+        "expires_at": (utc_now() + timedelta(hours=SESSION_HOURS)).isoformat(),
+        "revoked": False,
+        "ip_address": req.headers.get("X-Forwarded-For", ""),
+        "user_agent": req.headers.get("User-Agent", ""),
+    }
+    table(TABLE_SESSIONS).upsert_entity(entity)
+    return entity
+
+
+def session_id_from_req(req: func.HttpRequest) -> str:
+    session_id = clean(req.headers.get("X-Session-Id") or req.headers.get("x-session-id"))
     if session_id:
         return session_id
-
-    auth_header = req.headers.get("Authorization") or req.headers.get("authorization") or ""
-    if auth_header.lower().startswith("session "):
-        return auth_header[8:].strip()
-
+    auth = clean(req.headers.get("Authorization") or req.headers.get("authorization"))
+    if auth.lower().startswith("session "):
+        return auth.split(" ", 1)[1].strip()
     return ""
 
 
-def current_user(req: func.HttpRequest) -> Dict:
-    session_id = get_session_id(req)
-    if not session_id:
-        return {}
-
-    sessions = SessionRepository()
-    session = sessions.get_session(session_id)
-
-    if not session or not sessions.is_session_valid(session_id):
-        return {}
-
+def current_user(req: func.HttpRequest) -> Optional[Dict[str, Any]]:
+    sid = session_id_from_req(req)
+    if not sid:
+        return None
+    try:
+        session = dict(table(TABLE_SESSIONS).get_entity(partition_key=UNIVERSITY_ID, row_key=sid))
+    except ResourceNotFoundError:
+        return None
+    if session.get("revoked"):
+        return None
+    if clean(session.get("status")) != "approved":
+        return None
+    try:
+        expires = datetime.fromisoformat(clean(session.get("expires_at")))
+        if utc_now() >= expires:
+            return None
+    except Exception:
+        return None
+    user = get_user(session.get("email", "")) or {}
+    role = clean(user.get("role") or session.get("role") or ROLE_READER).lower()
+    if role == ROLE_ALUMNI:
+        role = ROLE_READER
     return {
-        "session_id": session.get("session_id", session_id),
-        "email": session.get("email", ""),
-        "sub": session.get("email", ""),
-        "user_id": session.get("user_id", ""),
-        "role": session.get("role", ""),
-        "status": session.get("status", ""),
+        "email": normalize_email(user.get("email") or session.get("email")),
+        "user_id": clean(user.get("user_id") or session.get("user_id")),
+        "full_name": clean(user.get("full_name") or session.get("full_name")),
+        "role": role,
+        "session_id": sid,
     }
 
 
-def require_login(req: func.HttpRequest) -> Dict:
+def require_login(req: func.HttpRequest) -> Dict[str, Any]:
     user = current_user(req)
     if not user:
         raise PermissionError("Login required")
     return user
 
 
-def require_role(req: func.HttpRequest, allowed: Iterable[str]) -> Dict:
+def require_role(req: func.HttpRequest, allowed: Iterable[str]) -> Dict[str, Any]:
     user = require_login(req)
-    if user.get("role") not in allowed:
+    allowed_set = {r.lower() for r in allowed}
+    role = user.get("role", "").lower()
+    if role not in allowed_set:
         raise PermissionError("Role not allowed")
     return user
 
 
-def forbidden(message: str, login_required: bool = False) -> func.HttpResponse:
-    return json_response({"success": False, "message": message}, 401 if login_required else 403)
+def list_table_rows(table_name: str) -> List[Dict[str, Any]]:
+    rows = table(table_name).query_entities(
+        query_filter="PartitionKey eq @partition",
+        parameters={"partition": UNIVERSITY_ID},
+    )
+    return [dict(row) for row in rows]
+
+
+def contains(field: Any, value: str) -> bool:
+    value = clean(value).lower()
+    if not value:
+        return True
+    return value in clean(field).lower()
+
+
+def public_alumni(profile: Dict[str, Any]) -> Dict[str, Any]:
+    item = remove_storage_keys(profile)
+    if not bool(item.get("show_email", True)):
+        item["email"] = ""
+    if not bool(item.get("show_mobile", False)):
+        item["mobile"] = ""
+    return item
+
+
+def content_rows(table_name: str, category: str = "") -> List[Dict[str, Any]]:
+    rows = [remove_storage_keys(row) for row in list_table_rows(table_name)]
+    rows = [row for row in rows if clean(row.get("status") or "published") == "published"]
+    if category:
+        rows = [row for row in rows if clean(row.get("category")) in ("", category)]
+    rows.sort(key=lambda x: clean(x.get("event_date") or x.get("created_at")), reverse=True)
+    return rows
+
+
+def create_content(req: func.HttpRequest, table_name: str, category: str, user: Dict[str, Any]) -> Dict[str, Any]:
+    data = body(req)
+    item_id = clean(data.get("id")) or str(uuid4())
+    entity = {
+        "PartitionKey": UNIVERSITY_ID,
+        "RowKey": item_id,
+        "id": item_id,
+        "title": clean(data.get("title")),
+        "summary": clean(data.get("summary")),
+        "body": clean(data.get("body") or data.get("description")),
+        "category": category,
+        "tags": clean(data.get("tags")),
+        "event_date": clean(data.get("event_date")),
+        "venue": clean(data.get("venue")),
+        "city": clean(data.get("city")),
+        "cover_image_url": clean(data.get("cover_image_url")),
+        "status": clean(data.get("status") or "published"),
+        "created_by": user.get("email", ""),
+        "created_at": utc_now_text(),
+        "updated_at": utc_now_text(),
+    }
+    if not entity["title"]:
+        raise ValueError("Title is required.")
+    table(table_name).upsert_entity(entity)
+    return remove_storage_keys(entity)
 
 
 @app.route(route="health", methods=["GET"])
 def health(req: func.HttpRequest) -> func.HttpResponse:
-    return json_response({"success": True, "message": "NUST Alumni API is running"})
+    return ok({"version": "kiss-session-v1"}, "NUST Alumni API is running")
+
+
+@app.route(route="register", methods=["POST"])
+def register(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        data = body(req)
+        email = normalize_email(data.get("email", ""))
+        if get_user(email):
+            return fail("User already exists.", 409)
+        user = save_user(
+            email=email,
+            full_name=data.get("full_name", ""),
+            password=data.get("password", ""),
+            role=ROLE_READER,
+            status="approved",
+        )
+        return ok(remove_storage_keys(user), "Registration successful.", 201)
+    except Exception as e:
+        return fail(str(e), 400)
+
 
 
 @app.route(route="auth/login", methods=["POST"])
 def login(req: func.HttpRequest) -> func.HttpResponse:
     data = body(req)
-    result = AuthService().login_with_password(data.get("email", ""), data.get("password", ""))
-    return json_response(result, 200 if result.get("success") else 401)
+    user = get_user(data.get("email", ""))
+    if not user or not verify_password(data.get("password", ""), clean(user.get("password_hash"))):
+        return fail("Invalid email or password.", 401)
+    if clean(user.get("status") or "approved") != "approved":
+        return fail("User is not approved.", 403)
+    session = create_session(user, req)
+    safe_user = remove_storage_keys(user)
+    if safe_user.get("role") == ROLE_ALUMNI:
+        safe_user["role"] = ROLE_READER
+    return ok(
+        {
+            "session_id": session["session_id"],
+            "user": safe_user,
+        },
+        "Login successful.",
+    )
+
+
+@app.route(route="auth/logout", methods=["POST"])
+def logout(req: func.HttpRequest) -> func.HttpResponse:
+    sid = session_id_from_req(req)
+    if sid:
+        try:
+            t = table(TABLE_SESSIONS)
+            session = dict(t.get_entity(partition_key=UNIVERSITY_ID, row_key=sid))
+            session["revoked"] = True
+            session["revoked_at"] = utc_now_text()
+            t.upsert_entity(session)
+        except ResourceNotFoundError:
+            pass
+    return ok({}, "Logged out.")
 
 
 @app.route(route="auth/me", methods=["GET"])
-def me(req: func.HttpRequest) -> func.HttpResponse:
-    session = current_user(req)
-    if not session:
-        return json_response({"success": False, "message": "Login required"}, 401)
-
-    result = AuthService().get_current_user_by_session(session["session_id"])
-    return json_response(result, 200 if result.get("success") else 401)
-
-
-@app.route(route="users", methods=["GET", "POST"])
-def users(req: func.HttpRequest) -> func.HttpResponse:
-    repo = UserRepository()
-    try:
-        require_role(req, [ROLE_ADMIN])
-        if req.method == "GET":
-            rows = repo.list_users()
-            for row in rows:
-                row.pop("password_hash", None)
-                row.pop("PartitionKey", None)
-                row.pop("RowKey", None)
-            return json_response({"success": True, "data": rows})
-
-        data = body(req)
-        user = repo.create_user(
-            email=data.get("email", ""),
-            full_name=data.get("full_name", ""),
-            mobile=data.get("mobile", ""),
-            role=data.get("role", ROLE_ALUMNI),
-            status=data.get("status", STATUS_APPROVED),
-            password_hash=hash_password(data.get("password", "ChangeMe123!")),
-            linked_alumni_id=data.get("linked_alumni_id", ""),
-        )
-        user.pop("password_hash", None)
-        return json_response({"success": True, "data": user}, 201)
-    except PermissionError as e:
-        return forbidden(str(e), str(e) == "Login required")
-    except Exception as e:
-        return json_response({"success": False, "message": str(e)}, 400)
-
-
-@app.route(route="alumni", methods=["GET", "POST"])
-def alumni(req: func.HttpRequest) -> func.HttpResponse:
-    repo = AlumniRepository()
-    try:
-        if req.method == "GET":
-            require_login(req)
-            params = req.params
-            rows = repo.search_public_profiles(
-                name=params.get("name", ""),
-                city=params.get("city", ""),
-                country=params.get("country", ""),
-                degree=params.get("degree", ""),
-                department=params.get("department", ""),
-                graduation_year=params.get("graduation_year", ""),
-                company=params.get("company", ""),
-                industry=params.get("industry", ""),
-                skills=params.get("skills", ""),
-            )
-            return json_response({"success": True, "data": rows})
-
-        require_role(req, [ROLE_ADMIN])
-        return json_response({"success": True, "data": repo.create_profile(body(req))}, 201)
-    except PermissionError as e:
-        return forbidden(str(e), str(e) == "Login required")
-    except Exception as e:
-        return json_response({"success": False, "message": str(e)}, 400)
-
-
-@app.route(route="alumni/{alumni_id}", methods=["PUT", "DELETE"])
-def alumni_item(req: func.HttpRequest) -> func.HttpResponse:
-    try:
-        require_role(req, [ROLE_ADMIN])
-        repo = AlumniRepository()
-        alumni_id = req.route_params.get("alumni_id")
-        if req.method == "DELETE":
-            return json_response({"success": repo.delete_profile(alumni_id)})
-        return json_response({"success": True, "data": repo.update_profile(alumni_id, body(req))})
-    except PermissionError as e:
-        return forbidden(str(e), str(e) == "Login required")
-    except Exception as e:
-        return json_response({"success": False, "message": str(e)}, 400)
-
-
-def content_endpoint(
-    req: func.HttpRequest,
-    table_key: str,
-    allowed_create_roles: Iterable[str],
-    public_read: bool = False,
-    default_category: Optional[str] = None,
-) -> func.HttpResponse:
-    repo = ContentRepository(table_key)
-    try:
-        if req.method == "GET":
-            if not public_read:
-                require_login(req)
-            category = req.params.get("category", default_category or "")
-            return json_response({"success": True, "data": repo.list(published_only=True, category=category)})
-
-        user = require_role(req, allowed_create_roles)
-        payload = body(req)
-        if default_category and not payload.get("category"):
-            payload["category"] = default_category
-        return json_response({"success": True, "data": repo.create(payload, user.get("email", user.get("sub", "")))}, 201)
-    except PermissionError as e:
-        return forbidden(str(e), str(e) == "Login required")
-    except Exception as e:
-        return json_response({"success": False, "message": str(e)}, 400)
+def session(req: func.HttpRequest) -> func.HttpResponse:
+    user = current_user(req)
+    if not user:
+        return fail("Login required", 401)
+    return ok(user, "Session active.")
 
 
 @app.route(route="events", methods=["GET", "POST"])
 def events(req: func.HttpRequest) -> func.HttpResponse:
-    # Public GET. Create still requires admin/contributor.
-    return content_endpoint(req, "events", [ROLE_ADMIN, ROLE_CONTRIBUTOR], public_read=True, default_category="event")
+    try:
+        if req.method == "GET":
+            return ok(content_rows(TABLE_EVENTS, "event"), "Events loaded.")
+        user = require_role(req, [ROLE_ADMIN, ROLE_CONTRIBUTOR])
+        return ok(create_content(req, TABLE_EVENTS, "event", user), "Event created.", 201)
+    except PermissionError as e:
+        return fail(str(e), 401 if str(e) == "Login required" else 403)
+    except Exception as e:
+        return fail(str(e), 400)
 
 
 @app.route(route="knowledge", methods=["GET", "POST"])
 def knowledge(req: func.HttpRequest) -> func.HttpResponse:
-    # Knowledge Base requires login even for reading.
-    return content_endpoint(req, "blogs", [ROLE_ADMIN, ROLE_CONTRIBUTOR], public_read=False, default_category="knowledge")
+    try:
+        if req.method == "GET":
+            require_login(req)
+            return ok(content_rows(TABLE_KNOWLEDGE, "knowledge"), "Knowledge loaded.")
+        user = require_role(req, [ROLE_ADMIN, ROLE_CONTRIBUTOR])
+        return ok(create_content(req, TABLE_KNOWLEDGE, "knowledge", user), "Knowledge article created.", 201)
+    except PermissionError as e:
+        return fail(str(e), 401 if str(e) == "Login required" else 403)
+    except Exception as e:
+        return fail(str(e), 400)
 
 
-@app.route(route="blogs", methods=["GET", "POST"])
-def blogs(req: func.HttpRequest) -> func.HttpResponse:
-    # Backward-compatible alias. Blogs are treated as Knowledge Base and require login.
-    return knowledge(req)
+@app.route(route="alumni", methods=["GET", "POST"])
+def alumni(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        if req.method == "GET":
+            require_login(req)
+            p = req.params
+            rows = []
+            for profile in list_table_rows(TABLE_ALUMNI):
+                status = clean(profile.get("status") or "active")
+                visibility = clean(profile.get("visibility") or "visible")
+                if status not in ("", "active") or visibility not in ("", "visible"):
+                    continue
+                if not contains(profile.get("full_name"), p.get("name", "")):
+                    continue
+                if not contains(profile.get("city"), p.get("city", "")):
+                    continue
+                if not contains(profile.get("country"), p.get("country", "")):
+                    continue
+                if not contains(profile.get("degree"), p.get("degree", "")):
+                    continue
+                if not contains(profile.get("department"), p.get("department", "")):
+                    continue
+                if not contains(profile.get("graduation_year"), p.get("graduation_year", "")):
+                    continue
+                if not contains(profile.get("current_company"), p.get("company", "")):
+                    continue
+                if not contains(profile.get("skills"), p.get("skills", "")):
+                    continue
+                rows.append(public_alumni(profile))
+            rows.sort(key=lambda x: clean(x.get("full_name")).lower())
+            return ok(rows, "Alumni loaded.")
+
+        require_role(req, [ROLE_ADMIN])
+        data = body(req)
+        alumni_id = clean(data.get("alumni_id")) or str(uuid4())
+        entity = {
+            "PartitionKey": UNIVERSITY_ID,
+            "RowKey": alumni_id,
+            "alumni_id": alumni_id,
+            "full_name": clean(data.get("full_name")),
+            "email": normalize_email(data.get("email", "")),
+            "mobile": clean(data.get("mobile")),
+            "city": clean(data.get("city")),
+            "country": clean(data.get("country")),
+            "degree": clean(data.get("degree")),
+            "department": clean(data.get("department")),
+            "graduation_year": clean(data.get("graduation_year")),
+            "current_company": clean(data.get("current_company")),
+            "current_position": clean(data.get("current_position")),
+            "industry": clean(data.get("industry")),
+            "linkedin_url": clean(data.get("linkedin_url")),
+            "bio": clean(data.get("bio")),
+            "skills": clean(data.get("skills")),
+            "profile_image_url": clean(data.get("profile_image_url")),
+            "status": clean(data.get("status") or "active"),
+            "visibility": clean(data.get("visibility") or "visible"),
+            "show_email": bool(data.get("show_email", True)),
+            "show_mobile": bool(data.get("show_mobile", False)),
+            "created_at": utc_now_text(),
+            "updated_at": utc_now_text(),
+        }
+        if not entity["full_name"]:
+            raise ValueError("Full name is required.")
+        table(TABLE_ALUMNI).upsert_entity(entity)
+        return ok(public_alumni(entity), "Alumni profile saved.", 201)
+    except PermissionError as e:
+        return fail(str(e), 401 if str(e) == "Login required" else 403)
+    except Exception as e:
+        return fail(str(e), 400)
 
 
 @app.route(route="media/upload", methods=["POST"])
-def media_upload(req: func.HttpRequest) -> func.HttpResponse:
+def upload(req: func.HttpRequest) -> func.HttpResponse:
     try:
-        require_role(req, [ROLE_ADMIN, ROLE_CONTRIBUTOR, ROLE_ALUMNI])
+        require_login(req)
         data = body(req)
-        result = MediaService().upload_image_base64(
-            data.get("target", "profile"),
-            data.get("file_name", "upload.png"),
-            data.get("content_base64", ""),
-        )
-        return json_response({"success": True, "data": result}, 201)
+        file_name = clean(data.get("file_name") or "upload.png")
+        encoded = clean(data.get("content_base64"))
+        if not encoded:
+            raise ValueError("content_base64 is required.")
+        if "," in encoded:
+            encoded = encoded.split(",", 1)[1]
+        raw = base64.b64decode(encoded)
+        safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", file_name)
+        blob_name = f"{uuid4()}-{safe_name}"
+        service = blob_service()
+        try:
+            service.create_container(BLOB_IMAGES)
+        except ResourceExistsError:
+            pass
+        content_type = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+        blob = service.get_blob_client(container=BLOB_IMAGES, blob=blob_name)
+        blob.upload_blob(raw, overwrite=True, content_settings=ContentSettings(content_type=content_type))
+        return ok({"url": blob.url, "blob_name": blob_name}, "Image uploaded.", 201)
     except PermissionError as e:
-        return forbidden(str(e), str(e) == "Login required")
+        return fail(str(e), 401)
     except Exception as e:
-        return json_response({"success": False, "message": str(e)}, 400)
+        return fail(str(e), 400)
+
+
+@app.route(route="users", methods=["GET", "POST"])
+def users(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        require_role(req, [ROLE_ADMIN])
+        if req.method == "GET":
+            return ok([remove_storage_keys(row) for row in list_table_rows(TABLE_USERS)], "Users loaded.")
+        data = body(req)
+        user = save_user(
+            email=data.get("email", ""),
+            full_name=data.get("full_name", ""),
+            password=data.get("password", "ChangeMe123!"),
+            role=data.get("role", ROLE_READER),
+            status=data.get("status", "approved"),
+        )
+        return ok(remove_storage_keys(user), "User created.", 201)
+    except PermissionError as e:
+        return fail(str(e), 401 if str(e) == "Login required" else 403)
+    except Exception as e:
+        return fail(str(e), 400)
