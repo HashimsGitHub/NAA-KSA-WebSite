@@ -1,4 +1,4 @@
-from api.shared.password_utils import (
+from shared.password_utils import (
     hash_password,
     verify_password,
     generate_temp_password,

@@ -1,4 +1,4 @@
-from api.repositories.alumni_repository import AlumniRepository
+from repositories.alumni_repository import AlumniRepository
 
 
 repo = AlumniRepository()

@@ -16,7 +16,7 @@ import bcrypt
 # ----------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------
-from api.shared.config import PASSWORD_POLICY
+from shared.config import PASSWORD_POLICY
 
 BCRYPT_ROUNDS = PASSWORD_POLICY["bcrypt_rounds"]
 DEFAULT_TEMP_PASSWORD_LENGTH = PASSWORD_POLICY["min_length"]

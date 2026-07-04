@@ -1,4 +1,4 @@
-from api.shared.storage_client import StorageClient
+from shared.storage_client import StorageClient
 
 storage = StorageClient()
 

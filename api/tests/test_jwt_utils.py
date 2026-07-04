@@ -1,4 +1,4 @@
-from api.shared.jwt_utils import (
+from shared.jwt_utils import (
     create_token,
     verify_token,
     extract_bearer_token,

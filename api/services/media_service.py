@@ -6,8 +6,8 @@ from uuid import uuid4
 
 from azure.storage.blob import ContentSettings
 
-from api.shared.config import ALLOWED_IMAGE_EXTENSIONS, BLOB_CONTAINERS
-from api.shared.storage_client import StorageClient
+from shared.config import ALLOWED_IMAGE_EXTENSIONS, BLOB_CONTAINERS
+from shared.storage_client import StorageClient
 
 
 class MediaService:

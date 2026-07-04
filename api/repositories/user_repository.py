@@ -4,11 +4,11 @@ from uuid import uuid4
 
 from azure.core.exceptions import ResourceNotFoundError
 
-from api.shared.storage_client import StorageClient
+from shared.storage_client import StorageClient
 
-from api.shared.config import TABLES
+from shared.config import TABLES
 
-from api.shared.config import UNIVERSITY_ID
+from shared.config import UNIVERSITY_ID
 
 #UNIVERSITY_ID = "NUST-KSA"
 

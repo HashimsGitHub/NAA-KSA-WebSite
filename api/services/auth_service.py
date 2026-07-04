@@ -1,15 +1,15 @@
 from typing import Dict
 
-from api.repositories.user_repository import UserRepository
-from api.repositories.session_repository import SessionRepository
-from api.shared.config import STATUS_APPROVED
-from api.shared.password_utils import (
+from repositories.user_repository import UserRepository
+from repositories.session_repository import SessionRepository
+from shared.config import STATUS_APPROVED
+from shared.password_utils import (
     verify_password,
     hash_password,
     generate_temp_password,
 )
-from api.shared.jwt_utils import create_token, verify_token
-from api.shared.response_utils import success_response, error_response
+from shared.jwt_utils import create_token, verify_token
+from shared.response_utils import success_response, error_response
 
 
 class AuthService:

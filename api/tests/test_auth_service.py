@@ -1,6 +1,6 @@
-from api.repositories.user_repository import UserRepository
-from api.services.auth_service import AuthService
-from api.shared.password_utils import hash_password
+from repositories.user_repository import UserRepository
+from services.auth_service import AuthService
+from shared.password_utils import hash_password
 
 
 users = UserRepository()

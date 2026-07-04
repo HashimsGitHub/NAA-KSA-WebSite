@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import jwt
 
-from api.shared.config import (
+from shared.config import (
     APPLICATION_NAME,
     ENV_JWT_SECRET,
     SESSION_TIMEOUT_HOURS,

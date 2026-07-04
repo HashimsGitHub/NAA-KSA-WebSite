@@ -1,7 +1,7 @@
 import pandas as pd
 from pathlib import Path
 
-from api.services.import_service import ImportService
+from services.import_service import ImportService
 
 
 test_file = Path("scripts/test_alumni_import.csv")

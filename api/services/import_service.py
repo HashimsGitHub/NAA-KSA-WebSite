@@ -4,8 +4,8 @@ from uuid import uuid4
 
 import pandas as pd
 
-from api.repositories.alumni_repository import AlumniRepository
-from api.shared.response_utils import success_response, error_response
+from repositories.alumni_repository import AlumniRepository
+from shared.response_utils import success_response, error_response
 
 
 COLUMN_MAP = {

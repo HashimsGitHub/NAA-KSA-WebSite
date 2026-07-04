@@ -4,8 +4,8 @@ from uuid import uuid4
 
 from azure.core.exceptions import ResourceNotFoundError
 
-from api.shared.config import TABLES, UNIVERSITY_ID
-from api.shared.storage_client import StorageClient
+from shared.config import TABLES, UNIVERSITY_ID
+from shared.storage_client import StorageClient
 
 
 def utc_now() -> str:

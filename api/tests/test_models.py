@@ -1,6 +1,6 @@
-from api.models.user import User
-from api.models.alumni import AlumniProfile
-from api.models.session import Session
+from models.user import User
+from models.alumni import AlumniProfile
+from models.session import Session
 
 
 user = User(

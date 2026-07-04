@@ -1,4 +1,4 @@
-from api.repositories.session_repository import SessionRepository
+from repositories.session_repository import SessionRepository
 
 
 repo = SessionRepository()

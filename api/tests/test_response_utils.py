@@ -1,4 +1,4 @@
-from api.shared.response_utils import (
+from shared.response_utils import (
     success_response,
     error_response,
     unauthorized_response,
