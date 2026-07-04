@@ -46,13 +46,24 @@ async function login() {
   });
 
   loginStatus.textContent = data.message || '';
+
   if (data.success) {
-    token = data.data.token;
-    currentUser = data.data.user;
+    token = data?.data?.token || '';
+
+    const payload = JSON.parse(atob(token.split('.')[1]));
+
+    currentUser = data?.data?.user || {
+      email: payload.sub,
+      role: payload.role,
+      full_name: payload.sub
+    };
+
     localStorage.setItem('naa_token', token);
     localStorage.setItem('naa_user', JSON.stringify(currentUser));
+
     renderAccessState();
     await loadPrivateContent();
+    await loadEvents();
   }
 }
 
@@ -127,10 +138,15 @@ async function loadKnowledge() {
 }
 
 async function loadPrivateContent() {
+  if (!isLoggedIn()) {
+    alumniList.innerHTML = '<p class="notice">Login to search alumni.</p>';
+    knowledgeList.innerHTML = '<p class="notice">Login to read the Knowledge Base.</p>';
+    return;
+  }
+
   await loadAlumni();
   await loadKnowledge();
 }
-
 function renderContent(items) {
   return items.map(x => `
     <article class="item">
