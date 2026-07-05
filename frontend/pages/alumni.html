@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alumni Directory | NUST Alumni KSA</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body data-page="alumni">
+  <nav class="topnav topnav-light">
+    <a class="brand" href="/">NUST Alumni KSA</a>
+    <a href="/pages/events.html">Events</a>
+    <a href="/pages/alumni.html">Alumni Directory</a>
+    <a href="/pages/blogs.html">Knowledge Base</a>
+    <a href="/pages/about.html">About</a>
+    <a href="/pages/charter.html">Charter</a>
+    <a data-auth="contributor" class="hidden" href="/pages/admin.html">Dashboard</a>
+    <a data-auth="guest" href="/pages/login.html">Login</a>
+    <button data-auth="user" id="logoutButton" class="link-button dark hidden" type="button">Logout</button>
+  </nav>
+  <main class="page-shell">
+    <section class="section-heading">
+      <p class="eyebrow">Members Only</p>
+      <h1>Alumni Directory</h1>
+      <p>Search approved, visible alumni profiles by name, degree, department, class year, city, company, country, or skills.</p>
+    </section>
+    <section class="tool-panel">
+      <div class="grid">
+        <input id="qName" placeholder="Name" />
+        <input id="qGraduationYear" placeholder="Graduation year" />
+        <input id="qDegree" placeholder="Degree" />
+        <input id="qDepartment" placeholder="Department" />
+        <input id="qCompany" placeholder="Company" />
+        <input id="qCity" placeholder="City" />
+        <input id="qCountry" placeholder="Country" />
+        <input id="qSkills" placeholder="Skills" />
+        <button id="searchButton" type="button">Search</button>
+      </div>
+    </section>
+    <div id="alumniList" class="cards"></div>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

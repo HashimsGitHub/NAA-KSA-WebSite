@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Control | NUST Alumni KSA</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body data-page="admin">
+  <nav class="topnav topnav-light">
+    <a class="brand" href="/">NUST Alumni KSA</a>
+    <a href="/pages/events.html">Events</a>
+    <a href="/pages/alumni.html">Alumni Directory</a>
+    <a href="/pages/blogs.html">Knowledge Base</a>
+    <a data-auth="guest" href="/pages/login.html">Login</a>
+    <button data-auth="user" id="logoutButton" class="link-button dark hidden" type="button">Logout</button>
+  </nav>
+  <main id="adminWorkspace" class="page-shell">
+    <section class="section-heading">
+      <p class="eyebrow">Administrator</p>
+      <h1>Admin Control</h1>
+      <p data-user-summary></p>
+    </section>
+
+    <section class="metrics" data-auth="admin">
+      <div><span id="countAlumni">0</span><p>Alumni Profiles</p></div>
+      <div><span id="countEvents">0</span><p>Events</p></div>
+      <div><span id="countKnowledge">0</span><p>Knowledge Articles</p></div>
+    </section>
+
+    <section class="admin-layout" data-auth="contributor">
+      <div class="tool-panel" data-auth="admin">
+        <h2>Events and Knowledge Base</h2>
+        <input id="contentId" type="hidden" />
+        <div class="grid">
+          <select id="contentType">
+            <option value="events">Event</option>
+            <option value="knowledge">Knowledge Base</option>
+          </select>
+          <select id="contentStatus">
+            <option value="published">Published</option>
+            <option value="draft">Draft</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <input id="contentTitle" placeholder="Title" />
+          <input id="contentSummary" placeholder="Summary" />
+          <input id="contentEventDate" type="date" />
+          <input id="contentVenue" placeholder="Venue" />
+          <input id="contentCity" placeholder="City" />
+          <input id="contentTags" placeholder="Tags" />
+          <textarea id="contentBody" placeholder="Description or article body"></textarea>
+          <input id="contentImage" type="file" accept="image/*" />
+          <button id="saveContentButton" type="button">Save</button>
+          <button id="resetContentButton" class="secondary" type="button">Clear</button>
+        </div>
+        <p id="contentStatusText" class="notice"></p>
+      </div>
+
+      <div class="tool-panel">
+        <h2>Alumni Profile</h2>
+        <input id="aId" type="hidden" />
+        <div class="grid">
+          <input id="aFullName" placeholder="Full name" />
+          <input id="aEmail" placeholder="Email" />
+          <input id="aMobile" placeholder="Mobile" />
+          <input id="aGraduationYear" placeholder="Graduation year" />
+          <input id="aDegree" placeholder="Degree" />
+          <input id="aDepartment" placeholder="Department" />
+          <input id="aCompany" placeholder="Current company" />
+          <input id="aPosition" placeholder="Current position" />
+          <input id="aCity" placeholder="City" />
+          <input id="aCountry" placeholder="Country" />
+          <input id="aSkills" placeholder="Skills" />
+          <input id="aLinkedin" placeholder="LinkedIn URL" />
+          <select id="aStatus">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="suspended">Suspended</option>
+          </select>
+          <select id="aVisibility">
+            <option value="visible">Visible</option>
+            <option value="hidden">Hidden</option>
+          </select>
+          <textarea id="aBio" placeholder="Bio"></textarea>
+          <button id="saveAlumniButton" type="button">Save</button>
+          <button id="resetAlumniButton" class="secondary" type="button">Clear</button>
+        </div>
+        <p id="alumniAdminStatus" class="notice"></p>
+      </div>
+    </section>
+
+    <p id="adminStatus" class="notice"></p>
+
+    <section class="admin-lists" data-auth="contributor">
+      <div data-auth="admin">
+        <h2>Events</h2>
+        <div id="adminEventList" class="cards compact"></div>
+      </div>
+      <div>
+        <h2>Knowledge Base</h2>
+        <div id="adminKnowledgeList" class="cards compact"></div>
+      </div>
+      <div>
+        <h2>Alumni Database</h2>
+        <div id="adminAlumniList" class="cards compact"></div>
+      </div>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

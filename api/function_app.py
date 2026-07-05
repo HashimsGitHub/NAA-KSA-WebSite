@@ -33,6 +33,7 @@ TABLE_ALUMNI = "AlumniProfiles"
 TABLE_EVENTS = "Events"
 TABLE_KNOWLEDGE = "BlogPosts"
 BLOB_IMAGES = "images"
+BLOB_SITE_IMAGES = "site-images"
 
 ROLE_ADMIN = "admin"
 ROLE_CONTRIBUTOR = "contributor"
@@ -297,6 +298,16 @@ def content_rows(table_name: str, category: str = "") -> List[Dict[str, Any]]:
     return rows
 
 
+def get_table_item(table_name: str, item_id: str) -> Dict[str, Any]:
+    item_id = clean(item_id)
+    if not item_id:
+        raise ValueError("Item id is required.")
+    try:
+        return dict(table(table_name).get_entity(partition_key=UNIVERSITY_ID, row_key=item_id))
+    except ResourceNotFoundError:
+        raise ValueError("Item not found.")
+
+
 def create_content(req: func.HttpRequest, table_name: str, category: str, user: Dict[str, Any]) -> Dict[str, Any]:
     data = body(req)
     item_id = clean(data.get("id")) or str(uuid4())
@@ -322,6 +333,83 @@ def create_content(req: func.HttpRequest, table_name: str, category: str, user: 
         raise ValueError("Title is required.")
     table(table_name).upsert_entity(entity)
     return remove_storage_keys(entity)
+
+
+def update_content(req: func.HttpRequest, table_name: str, item_id: str, category: str) -> Dict[str, Any]:
+    data = body(req)
+    entity = get_table_item(table_name, item_id)
+    editable = [
+        "title",
+        "summary",
+        "body",
+        "description",
+        "tags",
+        "event_date",
+        "venue",
+        "city",
+        "cover_image_url",
+        "status",
+    ]
+    for key in editable:
+        if key in data:
+            target = "body" if key == "description" else key
+            entity[target] = clean(data.get(key))
+    entity["category"] = category
+    entity["updated_at"] = utc_now_text()
+    if not clean(entity.get("title")):
+        raise ValueError("Title is required.")
+    table(table_name).upsert_entity(entity)
+    return remove_storage_keys(entity)
+
+
+def delete_item(table_name: str, item_id: str) -> None:
+    item_id = clean(item_id)
+    if not item_id:
+        raise ValueError("Item id is required.")
+    try:
+        table(table_name).delete_entity(partition_key=UNIVERSITY_ID, row_key=item_id)
+    except ResourceNotFoundError:
+        raise ValueError("Item not found.")
+
+
+def upsert_alumni(data: Dict[str, Any], alumni_id: str = "") -> Dict[str, Any]:
+    alumni_id = clean(alumni_id or data.get("alumni_id")) or str(uuid4())
+    existing: Dict[str, Any] = {}
+    try:
+        existing = get_table_item(TABLE_ALUMNI, alumni_id)
+    except ValueError:
+        pass
+    entity = {
+        **existing,
+        "PartitionKey": UNIVERSITY_ID,
+        "RowKey": alumni_id,
+        "alumni_id": alumni_id,
+        "full_name": clean(data.get("full_name", existing.get("full_name", ""))),
+        "email": normalize_email(data.get("email", existing.get("email", ""))),
+        "mobile": clean(data.get("mobile", existing.get("mobile", ""))),
+        "city": clean(data.get("city", existing.get("city", ""))),
+        "country": clean(data.get("country", existing.get("country", ""))),
+        "degree": clean(data.get("degree", existing.get("degree", ""))),
+        "department": clean(data.get("department", existing.get("department", ""))),
+        "graduation_year": clean(data.get("graduation_year", existing.get("graduation_year", ""))),
+        "current_company": clean(data.get("current_company", existing.get("current_company", ""))),
+        "current_position": clean(data.get("current_position", existing.get("current_position", ""))),
+        "industry": clean(data.get("industry", existing.get("industry", ""))),
+        "linkedin_url": clean(data.get("linkedin_url", existing.get("linkedin_url", ""))),
+        "bio": clean(data.get("bio", existing.get("bio", ""))),
+        "skills": clean(data.get("skills", existing.get("skills", ""))),
+        "profile_image_url": clean(data.get("profile_image_url", existing.get("profile_image_url", ""))),
+        "status": clean(data.get("status", existing.get("status", "active")) or "active"),
+        "visibility": clean(data.get("visibility", existing.get("visibility", "visible")) or "visible"),
+        "show_email": bool(data.get("show_email", existing.get("show_email", True))),
+        "show_mobile": bool(data.get("show_mobile", existing.get("show_mobile", False))),
+        "created_at": clean(existing.get("created_at")) or utc_now_text(),
+        "updated_at": utc_now_text(),
+    }
+    if not entity["full_name"]:
+        raise ValueError("Full name is required.")
+    table(TABLE_ALUMNI).upsert_entity(entity)
+    return public_alumni(entity)
 
 
 @app.route(route="health", methods=["GET"])
@@ -406,6 +494,21 @@ def events(req: func.HttpRequest) -> func.HttpResponse:
         return fail(str(e), 400)
 
 
+@app.route(route="events/{item_id}", methods=["PUT", "DELETE"])
+def event_item(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        require_role(req, [ROLE_ADMIN, ROLE_CONTRIBUTOR])
+        item_id = req.route_params.get("item_id", "")
+        if req.method == "DELETE":
+            delete_item(TABLE_EVENTS, item_id)
+            return ok({}, "Event deleted.")
+        return ok(update_content(req, TABLE_EVENTS, item_id, "event"), "Event updated.")
+    except PermissionError as e:
+        return fail(str(e), 401 if str(e) == "Login required" else 403)
+    except Exception as e:
+        return fail(str(e), 400)
+
+
 @app.route(route="knowledge", methods=["GET", "POST"])
 def knowledge(req: func.HttpRequest) -> func.HttpResponse:
     try:
@@ -414,6 +517,21 @@ def knowledge(req: func.HttpRequest) -> func.HttpResponse:
             return ok(content_rows(TABLE_KNOWLEDGE, "knowledge"), "Knowledge loaded.")
         user = require_role(req, [ROLE_ADMIN, ROLE_CONTRIBUTOR])
         return ok(create_content(req, TABLE_KNOWLEDGE, "knowledge", user), "Knowledge article created.", 201)
+    except PermissionError as e:
+        return fail(str(e), 401 if str(e) == "Login required" else 403)
+    except Exception as e:
+        return fail(str(e), 400)
+
+
+@app.route(route="knowledge/{item_id}", methods=["PUT", "DELETE"])
+def knowledge_item(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        require_role(req, [ROLE_ADMIN, ROLE_CONTRIBUTOR])
+        item_id = req.route_params.get("item_id", "")
+        if req.method == "DELETE":
+            delete_item(TABLE_KNOWLEDGE, item_id)
+            return ok({}, "Knowledge article deleted.")
+        return ok(update_content(req, TABLE_KNOWLEDGE, item_id, "knowledge"), "Knowledge article updated.")
     except PermissionError as e:
         return fail(str(e), 401 if str(e) == "Login required" else 403)
     except Exception as e:
@@ -453,38 +571,22 @@ def alumni(req: func.HttpRequest) -> func.HttpResponse:
             return ok(rows, "Alumni loaded.")
 
         require_role(req, [ROLE_ADMIN])
-        data = body(req)
-        alumni_id = clean(data.get("alumni_id")) or str(uuid4())
-        entity = {
-            "PartitionKey": UNIVERSITY_ID,
-            "RowKey": alumni_id,
-            "alumni_id": alumni_id,
-            "full_name": clean(data.get("full_name")),
-            "email": normalize_email(data.get("email", "")),
-            "mobile": clean(data.get("mobile")),
-            "city": clean(data.get("city")),
-            "country": clean(data.get("country")),
-            "degree": clean(data.get("degree")),
-            "department": clean(data.get("department")),
-            "graduation_year": clean(data.get("graduation_year")),
-            "current_company": clean(data.get("current_company")),
-            "current_position": clean(data.get("current_position")),
-            "industry": clean(data.get("industry")),
-            "linkedin_url": clean(data.get("linkedin_url")),
-            "bio": clean(data.get("bio")),
-            "skills": clean(data.get("skills")),
-            "profile_image_url": clean(data.get("profile_image_url")),
-            "status": clean(data.get("status") or "active"),
-            "visibility": clean(data.get("visibility") or "visible"),
-            "show_email": bool(data.get("show_email", True)),
-            "show_mobile": bool(data.get("show_mobile", False)),
-            "created_at": utc_now_text(),
-            "updated_at": utc_now_text(),
-        }
-        if not entity["full_name"]:
-            raise ValueError("Full name is required.")
-        table(TABLE_ALUMNI).upsert_entity(entity)
-        return ok(public_alumni(entity), "Alumni profile saved.", 201)
+        return ok(upsert_alumni(body(req)), "Alumni profile saved.", 201)
+    except PermissionError as e:
+        return fail(str(e), 401 if str(e) == "Login required" else 403)
+    except Exception as e:
+        return fail(str(e), 400)
+
+
+@app.route(route="alumni/{alumni_id}", methods=["PUT", "DELETE"])
+def alumni_item(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        require_role(req, [ROLE_ADMIN])
+        alumni_id = req.route_params.get("alumni_id", "")
+        if req.method == "DELETE":
+            delete_item(TABLE_ALUMNI, alumni_id)
+            return ok({}, "Alumni profile deleted.")
+        return ok(upsert_alumni(body(req), alumni_id), "Alumni profile updated.")
     except PermissionError as e:
         return fail(str(e), 401 if str(e) == "Login required" else 403)
     except Exception as e:
@@ -516,6 +618,40 @@ def upload(req: func.HttpRequest) -> func.HttpResponse:
         return ok({"url": blob.url, "blob_name": blob_name}, "Image uploaded.", 201)
     except PermissionError as e:
         return fail(str(e), 401)
+    except Exception as e:
+        return fail(str(e), 400)
+
+
+@app.route(route="site-image/{file_name}", methods=["GET"])
+def site_image(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        file_name = re.sub(r"[^A-Za-z0-9_.-]", "_", clean(req.route_params.get("file_name", "")))
+        if not file_name:
+            return fail("Image name is required.", 400)
+        blob = blob_service().get_blob_client(container=BLOB_SITE_IMAGES, blob=file_name)
+        raw = blob.download_blob().readall()
+        content_type = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+        return func.HttpResponse(raw, status_code=200, mimetype=content_type)
+    except ResourceNotFoundError:
+        return fail("Site image not found.", 404)
+    except Exception as e:
+        return fail(str(e), 400)
+
+
+@app.route(route="admin/summary", methods=["GET"])
+def admin_summary(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        require_role(req, [ROLE_ADMIN])
+        return ok(
+            {
+                "alumni": len(list_table_rows(TABLE_ALUMNI)),
+                "events": len(list_table_rows(TABLE_EVENTS)),
+                "knowledge": len(list_table_rows(TABLE_KNOWLEDGE)),
+            },
+            "Summary loaded.",
+        )
+    except PermissionError as e:
+        return fail(str(e), 401 if str(e) == "Login required" else 403)
     except Exception as e:
         return fail(str(e), 400)
 

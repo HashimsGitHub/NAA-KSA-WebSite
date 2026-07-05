@@ -3,109 +3,35 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NUST KSA Alumni Portal</title>
+  <title>NUST Alumni Association - KSA Chapter</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
-<body>
-  <header class="hero">
-    <nav>
-      <strong>NUST KSA Alumni</strong>
-      <a href="#events">Events</a>
-      <a href="#about">About Us</a>
-      <a href="#login">Login</a>
-      <a href="#alumni">Alumni</a>
-      <a href="#knowledge">Knowledge Base</a>
+<body data-page="home">
+  <header class="site-hero">
+    <nav class="topnav">
+      <a class="brand" href="/">NUST Alumni KSA</a>
+      <a href="/pages/events.html">Events</a>
+      <a href="/pages/alumni.html">Alumni Directory</a>
+      <a href="/pages/blogs.html">Knowledge Base</a>
+      <a href="/pages/about.html">About</a>
+      <a href="/pages/charter.html">Charter</a>
+      <a data-auth="contributor" class="hidden" href="/pages/admin.html">Dashboard</a>
+      <a data-auth="guest" href="/pages/login.html">Login</a>
+      <button data-auth="user" id="logoutButton" class="link-button hidden" type="button">Logout</button>
     </nav>
-    <h1>Simple alumni portal for NUST KSA</h1>
-    <p>Public events, member-only alumni search, and knowledge sharing.</p>
+    <div class="hero-copy">
+      <p class="eyebrow">Kingdom of Saudi Arabia Chapter</p>
+      <h1>NUST Alumni Association</h1>
+      <p>Connecting NUST graduates across KSA through professional networks, community events, mentorship, and service.</p>
+    </div>
   </header>
 
-  <main>
-    <section id="events" class="card">
-      <h2>Events</h2>
-      <p class="muted">Public events are visible to everyone.</p>
-      <div id="eventList" class="cards"></div>
+  <main class="page-shell">
+    <section class="section-heading">
+      <p class="eyebrow">Upcoming and Recent</p>
+      <h2>Chapter Events</h2>
     </section>
-
-    <section id="about" class="card">
-      <h2>About Us</h2>
-      <p>NUST KSA Alumni Portal connects alumni, contributors, and administrators through a simple community website.</p>
-      <p>Members can search the alumni database and read knowledge-base articles after login. Contributors can publish events and knowledge posts. Admins maintain users and alumni records.</p>
-    </section>
-
-    <section id="login" class="card">
-      <h2>Member Login</h2>
-      <div id="loginBox" class="grid">
-        <input id="email" type="email" placeholder="Email" autocomplete="username" />
-        <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
-        <button id="loginButton" type="button">Login</button>
-      </div>
-      <div id="userBox" class="hidden">
-        <p id="userSummary"></p>
-        <button id="logoutButton" type="button">Logout</button>
-      </div>
-      <p id="loginStatus" class="notice"></p>
-    </section>
-
-    <section id="alumni" class="card">
-      <h2>Alumni Search</h2>
-      <p class="muted">Reader, Contributor and Admin users can search alumni after login.</p>
-      <div id="alumniSearchBox" class="grid hidden">
-        <input id="qName" placeholder="Name" />
-        <input id="qGraduationYear" placeholder="Graduation Year" />
-        <input id="qDegree" placeholder="Degree" />
-        <input id="qDepartment" placeholder="Department" />
-        <input id="qCompany" placeholder="Company" />
-        <input id="qCountry" placeholder="Country" />
-        <button id="searchButton" type="button">Search</button>
-      </div>
-      <div id="alumniList" class="cards"><p class="notice">Login to search alumni.</p></div>
-    </section>
-
-    <section id="knowledge" class="card">
-      <h2>Knowledge Base</h2>
-      <p class="muted">Knowledge Base is available after login.</p>
-      <div id="knowledgeList" class="cards"><p class="notice">Login to read the Knowledge Base.</p></div>
-    </section>
-
-    <section id="adminPanel" class="card hidden">
-      <h2>Admin / Contributor</h2>
-      <p>Contributors can create Events and Knowledge posts. Admins can also create Alumni records.</p>
-
-      <h3>Create Event or Knowledge Post</h3>
-      <div class="grid">
-        <select id="newType">
-          <option value="knowledge">Knowledge Base</option>
-          <option value="events">Event</option>
-        </select>
-        <input id="newTitle" placeholder="Title" />
-        <input id="newSummary" placeholder="Summary" />
-        <textarea id="newBody" placeholder="Body / description"></textarea>
-        <input id="newEventDate" type="date" />
-        <input id="newImage" type="file" accept="image/*" />
-        <button id="createPostButton" type="button">Create Post</button>
-      </div>
-      <p id="adminStatus" class="notice"></p>
-
-      <div id="adminAlumniBox" class="hidden">
-        <h3>Create Alumni Profile</h3>
-        <div class="grid">
-          <input id="aFullName" placeholder="Full Name" />
-          <input id="aEmail" placeholder="Email" />
-          <input id="aGraduationYear" placeholder="Graduation Year" />
-          <input id="aDegree" placeholder="Degree" />
-          <input id="aDepartment" placeholder="Department" />
-          <input id="aCompany" placeholder="Current Company" />
-          <input id="aPosition" placeholder="Current Position" />
-          <input id="aCity" placeholder="City" />
-          <input id="aCountry" placeholder="Country" />
-          <input id="aSkills" placeholder="Skills" />
-          <textarea id="aBio" placeholder="Bio"></textarea>
-          <button id="createAlumniButton" type="button">Create Alumni</button>
-        </div>
-        <p id="alumniAdminStatus" class="notice"></p>
-      </div>
-    </section>
+    <div id="eventList" class="cards event-grid"></div>
   </main>
 
   <script src="/app.js"></script>

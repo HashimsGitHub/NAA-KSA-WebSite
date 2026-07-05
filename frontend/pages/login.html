@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Login | NUST Alumni KSA</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body data-page="login">
+  <nav class="topnav topnav-light">
+    <a class="brand" href="/">NUST Alumni KSA</a>
+    <a href="/pages/events.html">Events</a>
+    <a href="/pages/alumni.html">Alumni Directory</a>
+    <a href="/pages/blogs.html">Knowledge Base</a>
+    <a href="/pages/register.html">Register</a>
+  </nav>
+  <main class="auth-shell">
+    <section class="auth-panel">
+      <p class="eyebrow">Member Access</p>
+      <h1>Login</h1>
+      <div data-auth="guest" class="grid one-col">
+        <input id="email" type="email" placeholder="Email" autocomplete="username" />
+        <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+        <button id="loginButton" type="button">Login</button>
+      </div>
+      <div data-auth="user" class="hidden">
+        <p data-user-summary></p>
+        <button id="logoutButton" type="button">Logout</button>
+      </div>
+      <p id="loginStatus" class="notice"></p>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

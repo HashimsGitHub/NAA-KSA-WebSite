@@ -1,9 +1,11 @@
 const api = '/api';
 
 const el = (id) => document.getElementById(id);
+const page = document.body.dataset.page || 'home';
 
 let sessionId = localStorage.getItem('naa_session_id') || '';
 let currentUser = JSON.parse(localStorage.getItem('naa_user') || 'null');
+let adminState = { events: [], knowledge: [], alumni: [] };
 
 function isLoggedIn() {
   return Boolean(sessionId && currentUser);
@@ -11,6 +13,14 @@ function isLoggedIn() {
 
 function role() {
   return (currentUser?.role || '').toLowerCase();
+}
+
+function canContribute() {
+  return ['admin', 'contributor'].includes(role());
+}
+
+function isAdmin() {
+  return role() === 'admin';
 }
 
 function sessionHeaders() {
@@ -46,23 +56,124 @@ function show(id, visible) {
   if (node) node.classList.toggle('hidden', !visible);
 }
 
-function renderAccessState() {
-  const loggedIn = isLoggedIn();
-  const r = role();
-  show('loginBox', !loggedIn);
-  show('userBox', loggedIn);
-  show('alumniSearchBox', loggedIn);
-  show('adminPanel', loggedIn && ['admin', 'contributor'].includes(r));
-  show('adminAlumniBox', loggedIn && r === 'admin');
+function setText(id, text) {
+  const node = el(id);
+  if (node) node.textContent = text;
+}
 
-  if (loggedIn) {
-    el('userSummary').textContent = `${currentUser.full_name || currentUser.email} (${r})`;
-    el('loginStatus').textContent = 'Login successful.';
-  } else {
-    el('loginStatus').textContent = '';
-    setHtml('alumniList', '<p class="notice">Login to search alumni.</p>');
-    setHtml('knowledgeList', '<p class="notice">Login to read the Knowledge Base.</p>');
+function contentId(item) {
+  return item.id || item.event_id || item.post_id || item.alumni_id || '';
+}
+
+function renderAuthState() {
+  document.querySelectorAll('[data-auth="guest"]').forEach((node) => node.classList.toggle('hidden', isLoggedIn()));
+  document.querySelectorAll('[data-auth="user"]').forEach((node) => node.classList.toggle('hidden', !isLoggedIn()));
+  document.querySelectorAll('[data-auth="contributor"]').forEach((node) => node.classList.toggle('hidden', !canContribute()));
+  document.querySelectorAll('[data-auth="admin"]').forEach((node) => node.classList.toggle('hidden', !isAdmin()));
+  document.querySelectorAll('[data-user-summary]').forEach((node) => {
+    node.textContent = isLoggedIn() ? `${currentUser.full_name || currentUser.email} (${role()})` : '';
+  });
+}
+
+function renderEvents(items, admin = false) {
+  const rows = Array.isArray(items) ? items : [];
+  if (!rows.length) return '<p class="notice">No events have been published yet.</p>';
+  return rows.map((x) => `
+    <article class="item">
+      ${x.cover_image_url ? `<img src="${escapeHtml(x.cover_image_url)}" alt="${escapeHtml(x.title)}">` : ''}
+      <div class="item-body">
+        <span class="badge">${escapeHtml(x.event_date || 'Event')}</span>
+        <h3>${escapeHtml(x.title || 'Untitled event')}</h3>
+        <p>${escapeHtml(x.summary || x.body || '')}</p>
+        ${x.venue || x.city ? `<p class="meta">${escapeHtml([x.venue, x.city].filter(Boolean).join(', '))}</p>` : ''}
+      </div>
+      ${admin ? renderAdminActions('events', contentId(x)) : ''}
+    </article>
+  `).join('');
+}
+
+function renderKnowledge(items, admin = false) {
+  const rows = Array.isArray(items) ? items : [];
+  if (!rows.length) return '<p class="notice">No knowledge-base articles have been published yet.</p>';
+  return rows.map((x) => `
+    <article class="item">
+      ${x.cover_image_url ? `<img src="${escapeHtml(x.cover_image_url)}" alt="${escapeHtml(x.title)}">` : ''}
+      <div class="item-body">
+        <span class="badge">${escapeHtml(x.tags || 'Knowledge')}</span>
+        <h3>${escapeHtml(x.title || 'Untitled article')}</h3>
+        <p>${escapeHtml(x.summary || x.body || '')}</p>
+      </div>
+      ${admin ? renderAdminActions('knowledge', contentId(x)) : ''}
+    </article>
+  `).join('');
+}
+
+function renderAlumni(items, admin = false) {
+  const rows = Array.isArray(items) ? items : [];
+  if (!rows.length) return '<p class="notice">No alumni matched the current filters.</p>';
+  return rows.map((a) => `
+    <article class="item alumni-item">
+      ${a.profile_image_url ? `<img src="${escapeHtml(a.profile_image_url)}" alt="${escapeHtml(a.full_name)}">` : ''}
+      <div class="item-body">
+        <span class="badge">${escapeHtml(a.graduation_year || 'Alumni')}</span>
+        <h3>${escapeHtml(a.full_name || 'Unnamed Alumni')}</h3>
+        <p>${escapeHtml([a.degree, a.department].filter(Boolean).join(' - '))}</p>
+        <p>${escapeHtml([a.current_position, a.current_company].filter(Boolean).join(' at '))}</p>
+        <p class="meta">${escapeHtml([a.city, a.country].filter(Boolean).join(', '))}</p>
+        ${a.skills ? `<p>${escapeHtml(a.skills)}</p>` : ''}
+        ${a.linkedin_url ? `<p><a href="${escapeHtml(a.linkedin_url)}" target="_blank" rel="noopener">LinkedIn</a></p>` : ''}
+      </div>
+      ${admin ? renderAdminActions('alumni', a.alumni_id) : ''}
+    </article>
+  `).join('');
+}
+
+function renderAdminActions(type, id) {
+  return `
+    <div class="actions">
+      <button type="button" class="secondary" data-edit="${escapeHtml(type)}" data-id="${escapeHtml(id)}">Edit</button>
+      <button type="button" class="danger" data-delete="${escapeHtml(type)}" data-id="${escapeHtml(id)}">Delete</button>
+    </div>
+  `;
+}
+
+async function loadEvents(target = 'eventList') {
+  const data = await request('/events');
+  setHtml(target, data.success ? renderEvents(data.data, page === 'admin') : `<p class="error">${escapeHtml(data.message || 'Unable to load events.')}</p>`);
+  if (data.success && page === 'admin') adminState.events = data.data;
+}
+
+async function loadKnowledge(target = 'knowledgeList') {
+  if (!isLoggedIn()) {
+    setHtml(target, '<p class="notice">Please login to read the Knowledge Base.</p>');
+    return;
   }
+  const data = await request('/knowledge');
+  setHtml(target, data.success ? renderKnowledge(data.data, page === 'admin') : `<p class="error">${escapeHtml(data.message || 'Unable to load knowledge articles.')}</p>`);
+  if (data.success && page === 'admin') adminState.knowledge = data.data;
+}
+
+function alumniParams() {
+  return new URLSearchParams({
+    name: el('qName')?.value || '',
+    graduation_year: el('qGraduationYear')?.value || '',
+    degree: el('qDegree')?.value || '',
+    department: el('qDepartment')?.value || '',
+    company: el('qCompany')?.value || '',
+    country: el('qCountry')?.value || '',
+    city: el('qCity')?.value || '',
+    skills: el('qSkills')?.value || '',
+  });
+}
+
+async function loadAlumni(target = 'alumniList') {
+  if (!isLoggedIn()) {
+    setHtml(target, '<p class="notice">Please login to search alumni.</p>');
+    return;
+  }
+  const data = await request(`/alumni?${alumniParams().toString()}`);
+  setHtml(target, data.success ? renderAlumni(data.data, page === 'admin') : `<p class="error">${escapeHtml(data.message || 'Unable to load alumni.')}</p>`);
+  if (data.success && page === 'admin') adminState.alumni = data.data;
 }
 
 async function login() {
@@ -70,15 +181,15 @@ async function login() {
     method: 'POST',
     body: JSON.stringify({ email: el('email').value, password: el('password').value })
   });
-  el('loginStatus').textContent = data.message || '';
+  setText('loginStatus', data.message || '');
   if (!data.success) return;
-
   sessionId = data.data.session_id;
   currentUser = data.data.user;
   localStorage.setItem('naa_session_id', sessionId);
   localStorage.setItem('naa_user', JSON.stringify(currentUser));
-  renderAccessState();
-  await loadPrivateContent();
+  renderAuthState();
+  const next = new URLSearchParams(window.location.search).get('next');
+  window.location.href = next || '/';
 }
 
 async function logout() {
@@ -87,75 +198,20 @@ async function logout() {
   currentUser = null;
   localStorage.removeItem('naa_session_id');
   localStorage.removeItem('naa_user');
-  renderAccessState();
+  renderAuthState();
+  if (page !== 'home') window.location.href = '/';
 }
 
-function renderContent(items, emptyText) {
-  const rows = Array.isArray(items) ? items : [];
-  if (!rows.length) return `<p>${escapeHtml(emptyText)}</p>`;
-  return rows.map((x) => `
-    <article class="item">
-      ${x.cover_image_url ? `<img src="${escapeHtml(x.cover_image_url)}" alt="${escapeHtml(x.title)}">` : ''}
-      <h3>${escapeHtml(x.title || 'Untitled')}</h3>
-      <span class="badge">${escapeHtml(x.event_date || x.category || 'post')}</span>
-      <p>${escapeHtml(x.summary || '')}</p>
-      <p>${escapeHtml(x.body || '')}</p>
-    </article>
-  `).join('');
-}
-
-function renderAlumni(items) {
-  const rows = Array.isArray(items) ? items : [];
-  if (!rows.length) return '<p>No alumni found.</p>';
-  return rows.map((a) => `
-    <article class="item">
-      ${a.profile_image_url ? `<img src="${escapeHtml(a.profile_image_url)}" alt="${escapeHtml(a.full_name)}">` : ''}
-      <h3>${escapeHtml(a.full_name || 'Unnamed Alumni')}</h3>
-      <span class="badge">${escapeHtml(a.graduation_year || 'Alumni')}</span>
-      <p>${escapeHtml([a.degree, a.department].filter(Boolean).join(' - '))}</p>
-      <p>${escapeHtml([a.current_position, a.current_company].filter(Boolean).join(' at '))}</p>
-      <p>${escapeHtml([a.city, a.country].filter(Boolean).join(', '))}</p>
-      <p>${escapeHtml(a.skills || '')}</p>
-      ${a.linkedin_url ? `<p><a href="${escapeHtml(a.linkedin_url)}" target="_blank" rel="noopener">LinkedIn</a></p>` : ''}
-    </article>
-  `).join('');
-}
-
-async function loadEvents() {
-  const data = await request('/events');
-  setHtml('eventList', data.success ? renderContent(data.data, 'No events yet.') : `<p class="error">${escapeHtml(data.message || 'Unable to load events.')}</p>`);
-}
-
-async function loadKnowledge() {
-  if (!isLoggedIn()) {
-    setHtml('knowledgeList', '<p class="notice">Login to read the Knowledge Base.</p>');
-    return;
-  }
-  const data = await request('/knowledge');
-  setHtml('knowledgeList', data.success ? renderContent(data.data, 'No knowledge articles yet.') : `<p class="error">${escapeHtml(data.message || 'Unable to load knowledge articles.')}</p>`);
-}
-
-async function loadAlumni() {
-  if (!isLoggedIn()) {
-    setHtml('alumniList', '<p class="notice">Login to search alumni.</p>');
-    return;
-  }
-  const params = new URLSearchParams({
-    name: el('qName').value,
-    graduation_year: el('qGraduationYear').value,
-    degree: el('qDegree').value,
-    department: el('qDepartment').value,
-    company: el('qCompany').value,
-    country: el('qCountry').value,
+async function register() {
+  const data = await request('/register', {
+    method: 'POST',
+    body: JSON.stringify({
+      full_name: el('regFullName').value,
+      email: el('regEmail').value,
+      password: el('regPassword').value
+    })
   });
-  const data = await request(`/alumni?${params.toString()}`);
-  setHtml('alumniList', data.success ? renderAlumni(data.data) : `<p class="error">${escapeHtml(data.message || 'Unable to load alumni.')}</p>`);
-}
-
-async function loadPrivateContent() {
-  if (!isLoggedIn()) return;
-  await loadAlumni();
-  await loadKnowledge();
+  setText('registerStatus', data.message || '');
 }
 
 async function fileToBase64(file) {
@@ -169,100 +225,190 @@ async function fileToBase64(file) {
 
 async function uploadSelectedImage(file, target) {
   if (!file) return '';
-
   const uploaded = await request('/media/upload', {
     method: 'POST',
-    body: JSON.stringify({
-      target,
-      file_name: file.name,
-      content_base64: await fileToBase64(file)
-    })
+    body: JSON.stringify({ target, file_name: file.name, content_base64: await fileToBase64(file) })
   });
-
   if (!uploaded.success) throw new Error(uploaded.message || 'Image upload failed.');
-
   return uploaded.data.url;
 }
 
-async function createContent() {
+function contentPayload() {
+  return {
+    title: el('contentTitle').value,
+    summary: el('contentSummary').value,
+    body: el('contentBody').value,
+    event_date: el('contentEventDate').value,
+    venue: el('contentVenue').value,
+    city: el('contentCity').value,
+    tags: el('contentTags').value,
+    status: el('contentStatus').value || 'published',
+  };
+}
+
+async function saveContent() {
   try {
-    el('adminStatus').textContent = 'Saving...';
-
-    const type = el('newType').value; // expected: "events" or "knowledge"
-    const isEvent = type === 'events';
-
-    const cover_image_url = await uploadSelectedImage(
-      el('newImage').files[0],
-      isEvent ? 'event' : 'knowledge'
-    );
-
-    const data = await request(isEvent ? '/events' : '/knowledge', {
-      method: 'POST',
-      body: JSON.stringify({
-        title: el('newTitle').value,
-        summary: el('newSummary').value,
-        body: el('newBody').value,
-        event_date: el('newEventDate').value,
-        cover_image_url: cover_image_url || '',
-        category: isEvent ? 'event' : 'knowledge',
-        status: 'published'
-      })
+    setText('contentStatusText', 'Saving...');
+    const type = el('contentType').value;
+    const id = el('contentId').value;
+    const payload = contentPayload();
+    const upload = await uploadSelectedImage(el('contentImage').files[0], type === 'events' ? 'event' : 'knowledge');
+    if (upload) payload.cover_image_url = upload;
+    const data = await request(id ? `/${type}/${id}` : `/${type}`, {
+      method: id ? 'PUT' : 'POST',
+      body: JSON.stringify(payload)
     });
-
-    el('adminStatus').textContent = data.message || (data.success ? 'Created.' : 'Failed.');
-
+    setText('contentStatusText', data.message || '');
     if (data.success) {
-      ['newTitle', 'newSummary', 'newBody', 'newEventDate'].forEach((id) => {
-        el(id).value = '';
-      });
-      el('newImage').value = '';
-
-      await loadEvents();
-
-      if (isLoggedIn()) {
-        await loadKnowledge();
-      }
+      resetContentForm();
+      await refreshAdmin();
     }
   } catch (err) {
-    el('adminStatus').textContent = err.message || 'Failed to create content.';
+    setText('contentStatusText', err.message || 'Failed to save content.');
   }
 }
 
-async function createAlumni() {
-  const data = await request('/alumni', {
-    method: 'POST',
-    body: JSON.stringify({
-      full_name: el('aFullName').value,
-      email: el('aEmail').value,
-      graduation_year: el('aGraduationYear').value,
-      degree: el('aDegree').value,
-      department: el('aDepartment').value,
-      current_company: el('aCompany').value,
-      current_position: el('aPosition').value,
-      city: el('aCity').value,
-      country: el('aCountry').value,
-      skills: el('aSkills').value,
-      bio: el('aBio').value,
-      status: 'active',
-      visibility: 'visible'
-    })
+function alumniPayload() {
+  return {
+    full_name: el('aFullName').value,
+    email: el('aEmail').value,
+    mobile: el('aMobile').value,
+    graduation_year: el('aGraduationYear').value,
+    degree: el('aDegree').value,
+    department: el('aDepartment').value,
+    current_company: el('aCompany').value,
+    current_position: el('aPosition').value,
+    city: el('aCity').value,
+    country: el('aCountry').value,
+    skills: el('aSkills').value,
+    linkedin_url: el('aLinkedin').value,
+    bio: el('aBio').value,
+    status: el('aStatus').value || 'active',
+    visibility: el('aVisibility').value || 'visible',
+  };
+}
+
+async function saveAlumni() {
+  const id = el('aId').value;
+  const data = await request(id ? `/alumni/${id}` : '/alumni', {
+    method: id ? 'PUT' : 'POST',
+    body: JSON.stringify(alumniPayload())
   });
-  el('alumniAdminStatus').textContent = data.message || (data.success ? 'Created.' : 'Failed.');
+  setText('alumniAdminStatus', data.message || '');
   if (data.success) {
-    ['aFullName', 'aEmail', 'aGraduationYear', 'aDegree', 'aDepartment', 'aCompany', 'aPosition', 'aCity', 'aCountry', 'aSkills', 'aBio'].forEach((id) => { el(id).value = ''; });
-    await loadAlumni();
+    resetAlumniForm();
+    await refreshAdmin();
   }
+}
+
+async function deleteAdminItem(type, id) {
+  if (!id) return;
+  const data = await request(`/${type}/${id}`, { method: 'DELETE' });
+  setText('adminStatus', data.message || '');
+  if (data.success) await refreshAdmin();
+}
+
+function editContent(type, id) {
+  const item = adminState[type].find((x) => contentId(x) === id);
+  if (!item) return;
+  el('contentType').value = type;
+  el('contentId').value = id;
+  el('contentTitle').value = item.title || '';
+  el('contentSummary').value = item.summary || '';
+  el('contentBody').value = item.body || '';
+  el('contentEventDate').value = item.event_date || '';
+  el('contentVenue').value = item.venue || '';
+  el('contentCity').value = item.city || '';
+  el('contentTags').value = item.tags || '';
+  el('contentStatus').value = item.status || 'published';
+  setText('contentStatusText', `Editing ${item.title || id}`);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function editAlumni(id) {
+  const item = adminState.alumni.find((x) => x.alumni_id === id);
+  if (!item) return;
+  el('aId').value = id;
+  el('aFullName').value = item.full_name || '';
+  el('aEmail').value = item.email || '';
+  el('aMobile').value = item.mobile || '';
+  el('aGraduationYear').value = item.graduation_year || '';
+  el('aDegree').value = item.degree || '';
+  el('aDepartment').value = item.department || '';
+  el('aCompany').value = item.current_company || '';
+  el('aPosition').value = item.current_position || '';
+  el('aCity').value = item.city || '';
+  el('aCountry').value = item.country || '';
+  el('aSkills').value = item.skills || '';
+  el('aLinkedin').value = item.linkedin_url || '';
+  el('aBio').value = item.bio || '';
+  el('aStatus').value = item.status || 'active';
+  el('aVisibility').value = item.visibility || 'visible';
+  setText('alumniAdminStatus', `Editing ${item.full_name || id}`);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetContentForm() {
+  ['contentId', 'contentTitle', 'contentSummary', 'contentBody', 'contentEventDate', 'contentVenue', 'contentCity', 'contentTags'].forEach((id) => { if (el(id)) el(id).value = ''; });
+  if (el('contentImage')) el('contentImage').value = '';
+  if (el('contentStatus')) el('contentStatus').value = 'published';
+}
+
+function resetAlumniForm() {
+  ['aId', 'aFullName', 'aEmail', 'aMobile', 'aGraduationYear', 'aDegree', 'aDepartment', 'aCompany', 'aPosition', 'aCity', 'aCountry', 'aSkills', 'aLinkedin', 'aBio'].forEach((id) => { if (el(id)) el(id).value = ''; });
+  if (el('aStatus')) el('aStatus').value = 'active';
+  if (el('aVisibility')) el('aVisibility').value = 'visible';
+}
+
+async function loadSummary() {
+  const data = await request('/admin/summary');
+  if (!data.success) {
+    setText('adminStatus', data.message || 'Unable to load admin summary.');
+    return;
+  }
+  setText('countAlumni', data.data.alumni);
+  setText('countEvents', data.data.events);
+  setText('countKnowledge', data.data.knowledge);
+}
+
+async function refreshAdmin() {
+  if (!canContribute()) {
+    setHtml('adminWorkspace', '<p class="notice">Contributor or admin access is required for this page.</p>');
+    return;
+  }
+  const tasks = [loadEvents('adminEventList'), loadKnowledge('adminKnowledgeList')];
+  if (isAdmin()) tasks.push(loadSummary(), loadAlumni('adminAlumniList'));
+  await Promise.all(tasks);
 }
 
 function wireEvents() {
   el('loginButton')?.addEventListener('click', login);
   el('logoutButton')?.addEventListener('click', logout);
-  el('searchButton')?.addEventListener('click', loadAlumni);
-  el('createPostButton')?.addEventListener('click', createContent);
-  el('createAlumniButton')?.addEventListener('click', createAlumni);
+  el('registerButton')?.addEventListener('click', register);
+  el('searchButton')?.addEventListener('click', () => loadAlumni());
+  el('saveContentButton')?.addEventListener('click', saveContent);
+  el('resetContentButton')?.addEventListener('click', resetContentForm);
+  el('saveAlumniButton')?.addEventListener('click', saveAlumni);
+  el('resetAlumniButton')?.addEventListener('click', resetAlumniForm);
+  document.addEventListener('click', (event) => {
+    const edit = event.target.closest('[data-edit]');
+    const del = event.target.closest('[data-delete]');
+    if (edit) {
+      const type = edit.dataset.edit;
+      if (type === 'alumni') editAlumni(edit.dataset.id);
+      else editContent(type, edit.dataset.id);
+    }
+    if (del) deleteAdminItem(del.dataset.delete, del.dataset.id);
+  });
 }
 
-wireEvents();
-renderAccessState();
-loadEvents();
-if (isLoggedIn()) loadPrivateContent();
+async function init() {
+  renderAuthState();
+  wireEvents();
+  if (page === 'home' || page === 'events') await loadEvents();
+  if (page === 'knowledge') await loadKnowledge();
+  if (page === 'alumni') await loadAlumni();
+  if (page === 'admin') await refreshAdmin();
+}
+
+init();
