@@ -419,21 +419,7 @@ def health(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="register", methods=["POST"])
 def register(req: func.HttpRequest) -> func.HttpResponse:
-    try:
-        data = body(req)
-        email = normalize_email(data.get("email", ""))
-        if get_user(email):
-            return fail("User already exists.", 409)
-        user = save_user(
-            email=email,
-            full_name=data.get("full_name", ""),
-            password=data.get("password", ""),
-            role=ROLE_READER,
-            status="approved",
-        )
-        return ok(remove_storage_keys(user), "Registration successful.", 201)
-    except Exception as e:
-        return fail(str(e), 400)
+    return fail("Registration is disabled. Alumni accounts are managed through the member database import.", 410)
 
 
 

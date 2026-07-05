@@ -36,6 +36,7 @@ def test_alumni_get_requires_login():
     assert b"Login required" in res.get_body()
 
 
-def test_register_requires_json_but_does_not_crash():
+def test_register_is_disabled():
     res = function_app.register(DummyReq(method="POST", body={}))
-    assert res.status_code in (400, 409)
+    assert res.status_code == 410
+    assert b"Registration is disabled" in res.get_body()

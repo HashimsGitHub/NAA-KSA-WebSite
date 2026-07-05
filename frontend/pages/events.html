@@ -8,15 +8,16 @@
 </head>
 <body data-page="events">
   <nav class="topnav topnav-light">
-    <a class="brand" href="/">NUST Alumni KSA</a>
+    <a class="brand" href="/"><img src="https://stnustksaalumni.blob.core.windows.net/site-images/NUST-logo.png" alt="NUST logo">NUST Alumni KSA</a>
+    <a href="/">Home</a>
     <a href="/pages/events.html">Events</a>
-    <a href="/pages/alumni.html">Alumni Directory</a>
-    <a href="/pages/blogs.html">Knowledge Base</a>
+    <a data-requires="user" href="/pages/alumni.html">Alumni Directory</a>
+    <a data-requires="user" href="/pages/blogs.html">Knowledge Base</a>
     <a href="/pages/about.html">About</a>
     <a href="/pages/charter.html">Charter</a>
-    <a data-auth="contributor" class="hidden" href="/pages/admin.html">Dashboard</a>
-    <a data-auth="guest" href="/pages/login.html">Login</a>
-    <button data-auth="user" id="logoutButton" class="link-button dark hidden" type="button">Logout</button>
+    <a data-requires="contributor" href="/pages/admin.html">Dashboard</a>
+    <a data-requires="guest" href="/pages/login.html">Login</a>
+    <button data-requires="user" id="logoutButton" class="link-button dark" type="button">Logout</button>
   </nav>
   <main class="page-shell">
     <section class="section-heading">

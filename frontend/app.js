@@ -23,6 +23,15 @@ function isAdmin() {
   return role() === 'admin';
 }
 
+function navAllowed(requirement) {
+  if (!requirement) return true;
+  if (requirement === 'guest') return !isLoggedIn();
+  if (requirement === 'user') return isLoggedIn();
+  if (requirement === 'contributor') return canContribute();
+  if (requirement === 'admin') return isAdmin();
+  return true;
+}
+
 function sessionHeaders() {
   return sessionId ? { 'X-Session-Id': sessionId } : {};
 }
@@ -70,6 +79,12 @@ function renderAuthState() {
   document.querySelectorAll('[data-auth="user"]').forEach((node) => node.classList.toggle('hidden', !isLoggedIn()));
   document.querySelectorAll('[data-auth="contributor"]').forEach((node) => node.classList.toggle('hidden', !canContribute()));
   document.querySelectorAll('[data-auth="admin"]').forEach((node) => node.classList.toggle('hidden', !isAdmin()));
+  document.querySelectorAll('[data-requires]').forEach((node) => {
+    const allowed = navAllowed(node.dataset.requires);
+    node.classList.toggle('nav-disabled', !allowed);
+    node.setAttribute('aria-disabled', allowed ? 'false' : 'true');
+    node.tabIndex = allowed ? 0 : -1;
+  });
   document.querySelectorAll('[data-user-summary]').forEach((node) => {
     node.textContent = isLoggedIn() ? `${currentUser.full_name || currentUser.email} (${role()})` : '';
   });
@@ -200,18 +215,6 @@ async function logout() {
   localStorage.removeItem('naa_user');
   renderAuthState();
   if (page !== 'home') window.location.href = '/';
-}
-
-async function register() {
-  const data = await request('/register', {
-    method: 'POST',
-    body: JSON.stringify({
-      full_name: el('regFullName').value,
-      email: el('regEmail').value,
-      password: el('regPassword').value
-    })
-  });
-  setText('registerStatus', data.message || '');
 }
 
 async function fileToBase64(file) {
@@ -384,13 +387,17 @@ async function refreshAdmin() {
 function wireEvents() {
   el('loginButton')?.addEventListener('click', login);
   el('logoutButton')?.addEventListener('click', logout);
-  el('registerButton')?.addEventListener('click', register);
   el('searchButton')?.addEventListener('click', () => loadAlumni());
   el('saveContentButton')?.addEventListener('click', saveContent);
   el('resetContentButton')?.addEventListener('click', resetContentForm);
   el('saveAlumniButton')?.addEventListener('click', saveAlumni);
   el('resetAlumniButton')?.addEventListener('click', resetAlumniForm);
   document.addEventListener('click', (event) => {
+    const disabledNav = event.target.closest('[data-requires].nav-disabled');
+    if (disabledNav) {
+      event.preventDefault();
+      return;
+    }
     const edit = event.target.closest('[data-edit]');
     const del = event.target.closest('[data-delete]');
     if (edit) {

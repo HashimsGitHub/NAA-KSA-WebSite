@@ -16,6 +16,7 @@
 
 body {
   margin: 0;
+  padding-top: 74px;
   font-family: Arial, Helvetica, sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -31,7 +32,7 @@ a { color: var(--brand); }
   color: #fff;
   background:
     linear-gradient(90deg, rgba(6, 27, 34, 0.86), rgba(6, 27, 34, 0.46)),
-    url("/api/site-image/home-hero.jpg"),
+    url("https://stnustksaalumni.blob.core.windows.net/site-images/NUST-heroImage.jpg"),
     linear-gradient(135deg, #0f3d4c, #516b72);
   background-position: center;
   background-size: cover;
@@ -40,13 +41,23 @@ a { color: var(--brand); }
 }
 
 .topnav {
-  width: min(1180px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 18px 0;
+  position: fixed;
+  z-index: 1000;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  min-height: 74px;
+  margin: 0;
+  padding: 14px max(16px, calc((100vw - 1180px) / 2));
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
   flex-wrap: wrap;
+  background: rgba(9, 42, 52, 0.92);
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(12px);
 }
 
 .topnav a,
@@ -58,8 +69,6 @@ a { color: var(--brand); }
 }
 
 .topnav-light {
-  width: 100%;
-  padding: 16px max(16px, calc((100vw - 1180px) / 2));
   background: var(--surface);
   color: var(--text);
   border-bottom: 1px solid var(--line);
@@ -69,6 +78,26 @@ a { color: var(--brand); }
   margin-right: auto;
   font-size: 1.1rem !important;
   letter-spacing: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  white-space: nowrap;
+}
+
+.brand img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 6px;
+  padding: 3px;
+}
+
+.nav-disabled {
+  color: var(--muted) !important;
+  cursor: not-allowed;
+  opacity: 0.58;
+  pointer-events: auto;
 }
 
 .link-button {
@@ -323,9 +352,10 @@ button.danger {
 }
 
 @media (max-width: 780px) {
+  body { padding-top: 132px; }
   .site-hero { min-height: 620px; }
   .topnav { gap: 12px; }
-  .brand { width: 100%; }
+  .brand { width: 100%; margin-right: 0; }
   .metrics,
   .admin-layout { grid-template-columns: 1fr; }
   .hero-copy { padding-bottom: 48px; }
