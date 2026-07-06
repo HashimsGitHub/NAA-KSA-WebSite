@@ -40,3 +40,32 @@ def test_register_is_disabled():
     res = function_app.register(DummyReq(method="POST", body={}))
     assert res.status_code == 410
     assert b"Registration is disabled" in res.get_body()
+
+
+def test_admin_summary_requires_admin():
+    res = function_app.admin_summary(DummyReq(method="GET"))
+    assert res.status_code == 401
+    assert b"Login required" in res.get_body()
+
+
+def test_admin_summary_returns_counts(monkeypatch):
+    def fake_require_role(req, allowed):
+        assert allowed == [function_app.ROLE_ADMIN]
+        return {"email": "admin@example.com", "role": function_app.ROLE_ADMIN}
+
+    def fake_list_table_rows(table_name):
+        return {
+            function_app.TABLE_ALUMNI: [{}, {}],
+            function_app.TABLE_EVENTS: [{}],
+            function_app.TABLE_KNOWLEDGE: [{}, {}, {}],
+        }[table_name]
+
+    monkeypatch.setattr(function_app, "require_role", fake_require_role)
+    monkeypatch.setattr(function_app, "list_table_rows", fake_list_table_rows)
+
+    res = function_app.admin_summary(DummyReq(method="GET"))
+    assert res.status_code == 200
+    body = res.get_body()
+    assert b'"alumni": 2' in body
+    assert b'"events": 1' in body
+    assert b'"knowledge": 3' in body
