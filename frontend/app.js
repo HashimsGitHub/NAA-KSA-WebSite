@@ -363,15 +363,10 @@ function resetAlumniForm() {
   if (el('aVisibility')) el('aVisibility').value = 'visible';
 }
 
-async function loadSummary() {
-  const data = await request('/admin-summary');
-  if (!data.success) {
-    setText('adminStatus', data.message || 'Unable to load admin summary.');
-    return;
-  }
-  setText('countAlumni', data.data.alumni);
-  setText('countEvents', data.data.events);
-  setText('countKnowledge', data.data.knowledge);
+function updateAdminCounts() {
+  setText('countAlumni', adminState.alumni.length);
+  setText('countEvents', adminState.events.length);
+  setText('countKnowledge', adminState.knowledge.length);
 }
 
 async function refreshAdmin() {
@@ -380,8 +375,9 @@ async function refreshAdmin() {
     return;
   }
   const tasks = [loadEvents('adminEventList'), loadKnowledge('adminKnowledgeList')];
-  if (isAdmin()) tasks.push(loadSummary(), loadAlumni('adminAlumniList'));
+  if (isAdmin()) tasks.push(loadAlumni('adminAlumniList'));
   await Promise.all(tasks);
+  if (isAdmin()) updateAdminCounts();
 }
 
 function wireEvents() {
