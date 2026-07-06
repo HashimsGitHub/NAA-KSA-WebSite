@@ -364,7 +364,7 @@ function resetAlumniForm() {
 }
 
 async function loadSummary() {
-  const data = await request('/admin/summary');
+  const data = await request('/admin-summary');
   if (!data.success) {
     setText('adminStatus', data.message || 'Unable to load admin summary.');
     return;

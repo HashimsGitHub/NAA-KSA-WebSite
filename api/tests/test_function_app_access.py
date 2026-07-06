@@ -69,3 +69,20 @@ def test_admin_summary_returns_counts(monkeypatch):
     assert b'"alumni": 2' in body
     assert b'"events": 1' in body
     assert b'"knowledge": 3' in body
+
+
+def test_admin_summary_alias_uses_same_counts(monkeypatch):
+    monkeypatch.setattr(
+        function_app,
+        "require_role",
+        lambda req, allowed: {"email": "admin@example.com", "role": function_app.ROLE_ADMIN},
+    )
+    monkeypatch.setattr(
+        function_app,
+        "list_table_rows",
+        lambda table_name: [{}] if table_name == function_app.TABLE_EVENTS else [],
+    )
+
+    res = function_app.admin_summary_alias(DummyReq(method="GET"))
+    assert res.status_code == 200
+    assert b'"events": 1' in res.get_body()

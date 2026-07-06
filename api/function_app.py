@@ -624,8 +624,7 @@ def site_image(req: func.HttpRequest) -> func.HttpResponse:
         return fail(str(e), 400)
 
 
-@app.route(route="admin/summary", methods=["GET"])
-def admin_summary(req: func.HttpRequest) -> func.HttpResponse:
+def admin_summary_response(req: func.HttpRequest) -> func.HttpResponse:
     try:
         require_role(req, [ROLE_ADMIN])
         return ok(
@@ -640,6 +639,16 @@ def admin_summary(req: func.HttpRequest) -> func.HttpResponse:
         return fail(str(e), 401 if str(e) == "Login required" else 403)
     except Exception as e:
         return fail(str(e), 400)
+
+
+@app.route(route="admin/summary", methods=["GET"])
+def admin_summary(req: func.HttpRequest) -> func.HttpResponse:
+    return admin_summary_response(req)
+
+
+@app.route(route="admin-summary", methods=["GET"])
+def admin_summary_alias(req: func.HttpRequest) -> func.HttpResponse:
+    return admin_summary_response(req)
 
 
 @app.route(route="users", methods=["GET", "POST"])
