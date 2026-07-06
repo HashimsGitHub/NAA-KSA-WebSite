@@ -79,6 +79,14 @@ function renderAuthState() {
   document.querySelectorAll('[data-auth="user"]').forEach((node) => node.classList.toggle('hidden', !isLoggedIn()));
   document.querySelectorAll('[data-auth="contributor"]').forEach((node) => node.classList.toggle('hidden', !canContribute()));
   document.querySelectorAll('[data-auth="admin"]').forEach((node) => node.classList.toggle('hidden', !isAdmin()));
+  document.querySelectorAll('[data-admin-only-controls]').forEach((node) => {
+    const disabled = !isAdmin();
+    node.classList.toggle('is-disabled', disabled);
+    node.querySelectorAll('input, select, textarea, button').forEach((control) => {
+      control.disabled = disabled;
+      control.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    });
+  });
   document.querySelectorAll('[data-requires]').forEach((node) => {
     const allowed = navAllowed(node.dataset.requires);
     node.classList.toggle('nav-disabled', !allowed);
@@ -126,6 +134,7 @@ function renderKnowledge(items, admin = false) {
 function renderAlumni(items, admin = false) {
   const rows = Array.isArray(items) ? items : [];
   if (!rows.length) return '<p class="notice">No alumni matched the current filters.</p>';
+  const disableActions = page === 'admin' && !isAdmin();
   return rows.map((a) => `
     <article class="item alumni-item">
       ${a.profile_image_url ? `<img src="${escapeHtml(a.profile_image_url)}" alt="${escapeHtml(a.full_name)}">` : ''}
@@ -138,16 +147,17 @@ function renderAlumni(items, admin = false) {
         ${a.skills ? `<p>${escapeHtml(a.skills)}</p>` : ''}
         ${a.linkedin_url ? `<p><a href="${escapeHtml(a.linkedin_url)}" target="_blank" rel="noopener">LinkedIn</a></p>` : ''}
       </div>
-      ${admin ? renderAdminActions('alumni', a.alumni_id) : ''}
+      ${admin ? renderAdminActions('alumni', a.alumni_id, disableActions) : ''}
     </article>
   `).join('');
 }
 
-function renderAdminActions(type, id) {
+function renderAdminActions(type, id, disabled = false) {
+  const disabledAttributes = disabled ? 'disabled aria-disabled="true"' : '';
   return `
     <div class="actions">
-      <button type="button" class="secondary" data-edit="${escapeHtml(type)}" data-id="${escapeHtml(id)}">Edit</button>
-      <button type="button" class="danger" data-delete="${escapeHtml(type)}" data-id="${escapeHtml(id)}">Delete</button>
+      <button type="button" class="secondary" data-edit="${escapeHtml(type)}" data-id="${escapeHtml(id)}" ${disabledAttributes}>Edit</button>
+      <button type="button" class="danger" data-delete="${escapeHtml(type)}" data-id="${escapeHtml(id)}" ${disabledAttributes}>Delete</button>
     </div>
   `;
 }
@@ -374,10 +384,10 @@ async function refreshAdmin() {
     setHtml('adminWorkspace', '<p class="notice">Contributor or admin access is required for this page.</p>');
     return;
   }
-  const tasks = [loadEvents('adminEventList'), loadKnowledge('adminKnowledgeList')];
-  if (isAdmin()) tasks.push(loadAlumni('adminAlumniList'));
+  const tasks = [loadEvents('adminEventList'), loadKnowledge('adminKnowledgeList'), loadAlumni('adminAlumniList')];
   await Promise.all(tasks);
-  if (isAdmin()) updateAdminCounts();
+  updateAdminCounts();
+  renderAuthState();
 }
 
 function wireEvents() {
@@ -396,6 +406,7 @@ function wireEvents() {
     }
     const edit = event.target.closest('[data-edit]');
     const del = event.target.closest('[data-delete]');
+    if (edit?.disabled || del?.disabled) return;
     if (edit) {
       const type = edit.dataset.edit;
       if (type === 'alumni') editAlumni(edit.dataset.id);

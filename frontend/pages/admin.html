@@ -26,14 +26,14 @@
       <p data-user-summary></p>
     </section>
 
-    <section class="metrics" data-auth="admin">
+    <section class="metrics">
       <div><span id="countAlumni">0</span><p>Alumni Profiles</p></div>
       <div><span id="countEvents">0</span><p>Events</p></div>
       <div><span id="countKnowledge">0</span><p>Knowledge Articles</p></div>
     </section>
 
     <section class="admin-layout" data-auth="contributor">
-      <div class="tool-panel" data-auth="admin">
+      <div class="tool-panel">
         <h2>Events and Knowledge Base</h2>
         <input id="contentId" type="hidden" />
         <div class="grid">
@@ -60,7 +60,7 @@
         <p id="contentStatusText" class="notice"></p>
       </div>
 
-      <div class="tool-panel" data-auth="admin">
+      <div class="tool-panel admin-disabled-surface" data-admin-only-controls>
         <h2>Alumni Profile</h2>
         <input id="aId" type="hidden" />
         <div class="grid">
@@ -96,7 +96,7 @@
     <p id="adminStatus" class="notice"></p>
 
     <section class="admin-lists" data-auth="contributor">
-      <div data-auth="admin">
+      <div>
         <h2>Events</h2>
         <div id="adminEventList" class="cards compact"></div>
       </div>
@@ -104,7 +104,7 @@
         <h2>Knowledge Base</h2>
         <div id="adminKnowledgeList" class="cards compact"></div>
       </div>
-      <div>
+      <div class="admin-disabled-surface" data-admin-only-controls>
         <h2>Alumni Database</h2>
         <div id="adminAlumniList" class="cards compact"></div>
       </div>
