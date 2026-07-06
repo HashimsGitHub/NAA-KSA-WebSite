@@ -39,6 +39,7 @@ ROLE_ADMIN = "admin"
 ROLE_CONTRIBUTOR = "contributor"
 ROLE_READER = "reader"
 ROLE_ALUMNI = "alumni"  # backward-compatible existing seed role
+USER_ROLES = {ROLE_ADMIN, ROLE_CONTRIBUTOR, ROLE_ALUMNI}
 
 
 def utc_now() -> datetime:
@@ -166,8 +167,6 @@ def save_user(email: str, full_name: str, password: str, role: str = ROLE_READER
     if not email or not password:
         raise ValueError("Email and password are required.")
     role = clean(role).lower() or ROLE_READER
-    if role == ROLE_ALUMNI:
-        role = ROLE_READER
     entity = {
         "PartitionKey": UNIVERSITY_ID,
         "RowKey": email,
@@ -184,11 +183,51 @@ def save_user(email: str, full_name: str, password: str, role: str = ROLE_READER
     return entity
 
 
+def normalize_user_role(value: Any) -> str:
+    role = clean(value).lower()
+    return role if role in USER_ROLES else ROLE_ALUMNI
+
+
+def alumni_status_to_user_status(value: Any) -> str:
+    status = clean(value).lower()
+    if status in ("active", "approved", ""):
+        return "approved"
+    if status == "inactive":
+        return "suspended"
+    return status
+
+
+def sync_alumni_user(alumni: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    email = normalize_email(alumni.get("email", ""))
+    mobile = clean(alumni.get("mobile"))
+    if not email or not mobile:
+        return None
+
+    existing = get_user(email) or {}
+    entity = {
+        **existing,
+        "PartitionKey": UNIVERSITY_ID,
+        "RowKey": email,
+        "user_id": clean(existing.get("user_id")) or str(uuid4()),
+        "email": email,
+        "full_name": clean(alumni.get("full_name")) or clean(existing.get("full_name")) or email,
+        "mobile": mobile,
+        "role": normalize_user_role(alumni.get("role")),
+        "status": alumni_status_to_user_status(alumni.get("status") or existing.get("status")),
+        "auth_method": clean(existing.get("auth_method")) or "password",
+        "password_hash": hash_password(mobile),
+        "password_reset_required": bool(existing.get("password_reset_required", False)),
+        "linked_alumni_id": clean(alumni.get("alumni_id") or existing.get("linked_alumni_id")),
+        "created_at": clean(existing.get("created_at")) or utc_now_text(),
+        "updated_at": utc_now_text(),
+    }
+    table(TABLE_USERS).upsert_entity(entity)
+    return entity
+
+
 def create_session(user: Dict[str, Any], req: func.HttpRequest) -> Dict[str, Any]:
     session_id = secrets.token_urlsafe(32)
-    role = clean(user.get("role") or ROLE_READER).lower()
-    if role == ROLE_ALUMNI:
-        role = ROLE_READER
+    role = clean(user.get("role") or ROLE_ALUMNI).lower()
     entity = {
         "PartitionKey": UNIVERSITY_ID,
         "RowKey": session_id,
@@ -237,9 +276,7 @@ def current_user(req: func.HttpRequest) -> Optional[Dict[str, Any]]:
     except Exception:
         return None
     user = get_user(session.get("email", "")) or {}
-    role = clean(user.get("role") or session.get("role") or ROLE_READER).lower()
-    if role == ROLE_ALUMNI:
-        role = ROLE_READER
+    role = clean(user.get("role") or session.get("role") or ROLE_ALUMNI).lower()
     return {
         "email": normalize_email(user.get("email") or session.get("email")),
         "user_id": clean(user.get("user_id") or session.get("user_id")),
@@ -399,6 +436,7 @@ def upsert_alumni(data: Dict[str, Any], alumni_id: str = "") -> Dict[str, Any]:
         "bio": clean(data.get("bio", existing.get("bio", ""))),
         "skills": clean(data.get("skills", existing.get("skills", ""))),
         "profile_image_url": clean(data.get("profile_image_url", existing.get("profile_image_url", ""))),
+        "role": normalize_user_role(data.get("role", existing.get("role", ROLE_ALUMNI))),
         "status": clean(data.get("status", existing.get("status", "active")) or "active"),
         "visibility": clean(data.get("visibility", existing.get("visibility", "visible")) or "visible"),
         "show_email": bool(data.get("show_email", existing.get("show_email", True))),
@@ -409,6 +447,7 @@ def upsert_alumni(data: Dict[str, Any], alumni_id: str = "") -> Dict[str, Any]:
     if not entity["full_name"]:
         raise ValueError("Full name is required.")
     table(TABLE_ALUMNI).upsert_entity(entity)
+    sync_alumni_user(entity)
     return public_alumni(entity)
 
 
@@ -433,8 +472,6 @@ def login(req: func.HttpRequest) -> func.HttpResponse:
         return fail("User is not approved.", 403)
     session = create_session(user, req)
     safe_user = remove_storage_keys(user)
-    if safe_user.get("role") == ROLE_ALUMNI:
-        safe_user["role"] = ROLE_READER
     return ok(
         {
             "session_id": session["session_id"],

@@ -297,7 +297,8 @@ function alumniPayload() {
     linkedin_url: el('aLinkedin').value,
     bio: el('aBio').value,
     status: el('aStatus').value || 'active',
-    visibility: el('aVisibility').value || 'visible',
+    role: el('aRole').value || 'alumni',
+    visibility: 'visible',
   };
 }
 
@@ -356,7 +357,7 @@ function editAlumni(id) {
   el('aLinkedin').value = item.linkedin_url || '';
   el('aBio').value = item.bio || '';
   el('aStatus').value = item.status || 'active';
-  el('aVisibility').value = item.visibility || 'visible';
+  el('aRole').value = item.role || 'alumni';
   setText('alumniAdminStatus', `Editing ${item.full_name || id}`);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -370,7 +371,7 @@ function resetContentForm() {
 function resetAlumniForm() {
   ['aId', 'aFullName', 'aEmail', 'aMobile', 'aGraduationYear', 'aDegree', 'aDepartment', 'aCompany', 'aPosition', 'aCity', 'aCountry', 'aSkills', 'aLinkedin', 'aBio'].forEach((id) => { if (el(id)) el(id).value = ''; });
   if (el('aStatus')) el('aStatus').value = 'active';
-  if (el('aVisibility')) el('aVisibility').value = 'visible';
+  if (el('aRole')) el('aRole').value = 'alumni';
 }
 
 function updateAdminCounts() {

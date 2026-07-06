@@ -25,7 +25,7 @@ PartitionKey: NUST-KSARowKey: alumni_id
 Fields:
 
 ```
-alumni_idfull_namepreferred_nameemailmobilecitycountrydegreedepartmentgraduation_yearcurrent_companycurrent_positionindustrylinkedin_urlfacebook_urlinstagram_urlwebsite_urlbioskillsinterestsavailable_to_mentor: true/falselooking_for_jobs: true/falseavailable_to_recruit: true/falseprofile_image_urlvisibility: visible | hiddenshow_mobile: true/falseshow_email: true/falsestatus: active | inactive | suspendedcreated_atupdated_at
+alumni_idfull_namepreferred_nameemailmobilecitycountrydegreedepartmentgraduation_yearcurrent_companycurrent_positionindustrylinkedin_urlfacebook_urlinstagram_urlwebsite_urlbioskillsinterestsavailable_to_mentor: true/falselooking_for_jobs: true/falseavailable_to_recruit: true/falseprofile_image_urlrole: admin | contributor | alumnivisibility: visible | hiddenshow_mobile: true/falseshow_email: true/falsestatus: active | inactive | suspendedcreated_atupdated_at
 ```
 
 Do not store:

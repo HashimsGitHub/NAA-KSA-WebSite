@@ -86,3 +86,51 @@ def test_admin_summary_alias_uses_same_counts(monkeypatch):
     res = function_app.admin_summary_alias(DummyReq(method="GET"))
     assert res.status_code == 200
     assert b'"events": 1' in res.get_body()
+
+
+def test_sync_alumni_user_uses_email_row_key_and_mobile_password(monkeypatch):
+    saved = {}
+
+    class FakeTable:
+        def upsert_entity(self, entity):
+            saved.update(entity)
+
+    monkeypatch.setattr(function_app, "get_user", lambda email: {})
+    monkeypatch.setattr(function_app, "hash_password", lambda password: f"hashed:{password}")
+    monkeypatch.setattr(function_app, "table", lambda table_name: FakeTable())
+
+    result = function_app.sync_alumni_user(
+        {
+            "alumni_id": "alumni-1",
+            "full_name": "Test Alumni",
+            "email": "Test.Alumni@Example.COM",
+            "mobile": "0551234567",
+            "role": "contributor",
+            "status": "active",
+        }
+    )
+
+    assert result["RowKey"] == "test.alumni@example.com"
+    assert result["email"] == "test.alumni@example.com"
+    assert result["mobile"] == "0551234567"
+    assert result["role"] == "contributor"
+    assert result["status"] == "approved"
+    assert result["password_hash"] == "hashed:0551234567"
+    assert result["linked_alumni_id"] == "alumni-1"
+    assert saved == result
+
+
+def test_sync_alumni_user_skips_missing_mobile(monkeypatch):
+    monkeypatch.setattr(function_app, "table", lambda table_name: (_ for _ in ()).throw(AssertionError("no write")))
+
+    result = function_app.sync_alumni_user(
+        {
+            "alumni_id": "alumni-2",
+            "full_name": "No Mobile",
+            "email": "nomobile@example.com",
+            "mobile": "",
+            "role": "admin",
+        }
+    )
+
+    assert result is None

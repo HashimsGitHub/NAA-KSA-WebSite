@@ -176,6 +176,7 @@ class ImportService:
                 else:
                     profile[target_field] = ""
 
+            profile["role"] = "alumni"
             profile["visibility"] = "visible"
             profile["status"] = "active"
             profile["show_mobile"] = False
