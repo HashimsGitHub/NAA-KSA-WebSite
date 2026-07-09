@@ -6,6 +6,10 @@ const page = document.body.dataset.page || 'home';
 let sessionId = localStorage.getItem('naa_session_id') || '';
 let currentUser = JSON.parse(localStorage.getItem('naa_user') || 'null');
 let adminState = { events: [], knowledge: [], alumni: [] };
+const alumniPaging = {
+  alumniList: { page: 1, pageSize: 24, items: [] },
+  adminAlumniList: { page: 1, pageSize: 12, items: [] },
+};
 
 function isLoggedIn() {
   return Boolean(sessionId && currentUser);
@@ -152,6 +156,58 @@ function renderAlumni(items, admin = false) {
   `).join('');
 }
 
+function alumniPageSize(target) {
+  return target === 'adminAlumniList' ? 12 : 24;
+}
+
+function alumniTargetLabel(target) {
+  return target === 'adminAlumniList' ? 'admin alumni records' : 'alumni profiles';
+}
+
+function setAlumniPage(target, pageNumber) {
+  const state = alumniPaging[target];
+  if (!state) return;
+  const pageCount = Math.max(1, Math.ceil(state.items.length / state.pageSize));
+  state.page = Math.min(Math.max(1, pageNumber), pageCount);
+  renderAlumniPage(target);
+}
+
+function renderAlumniPager(target, page, pageCount, total, from, to) {
+  const label = alumniTargetLabel(target);
+  if (!total) return '';
+  return `
+    <div class="pagination" aria-label="${escapeHtml(label)} pagination">
+      <p class="pagination-summary">Showing ${from}-${to} of ${total} ${escapeHtml(label)}</p>
+      <div class="pagination-actions">
+        <button type="button" class="secondary" data-alumni-page-target="${escapeHtml(target)}" data-alumni-page="first" ${page <= 1 ? 'disabled' : ''}>First</button>
+        <button type="button" class="secondary" data-alumni-page-target="${escapeHtml(target)}" data-alumni-page="prev" ${page <= 1 ? 'disabled' : ''}>Previous</button>
+        <span class="page-indicator">Page ${page} of ${pageCount}</span>
+        <button type="button" class="secondary" data-alumni-page-target="${escapeHtml(target)}" data-alumni-page="next" ${page >= pageCount ? 'disabled' : ''}>Next</button>
+        <button type="button" class="secondary" data-alumni-page-target="${escapeHtml(target)}" data-alumni-page="last" ${page >= pageCount ? 'disabled' : ''}>Last</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderAlumniPage(target) {
+  const state = alumniPaging[target];
+  if (!state) return;
+  const total = state.items.length;
+  const pageCount = Math.max(1, Math.ceil(total / state.pageSize));
+  state.page = Math.min(Math.max(1, state.page), pageCount);
+
+  if (!total) {
+    setHtml(target, renderAlumni([], page === 'admin'));
+    return;
+  }
+
+  const start = (state.page - 1) * state.pageSize;
+  const pageItems = state.items.slice(start, start + state.pageSize);
+  const from = start + 1;
+  const to = start + pageItems.length;
+  setHtml(target, `${renderAlumniPager(target, state.page, pageCount, total, from, to)}${renderAlumni(pageItems, page === 'admin')}${renderAlumniPager(target, state.page, pageCount, total, from, to)}`);
+}
+
 function renderAdminActions(type, id, disabled = false) {
   const disabledAttributes = disabled ? 'disabled aria-disabled="true"' : '';
   return `
@@ -197,8 +253,17 @@ async function loadAlumni(target = 'alumniList') {
     return;
   }
   const data = await request(`/alumni?${alumniParams().toString()}`);
-  setHtml(target, data.success ? renderAlumni(data.data, page === 'admin') : `<p class="error">${escapeHtml(data.message || 'Unable to load alumni.')}</p>`);
-  if (data.success && page === 'admin') adminState.alumni = data.data;
+  if (!data.success) {
+    setHtml(target, `<p class="error">${escapeHtml(data.message || 'Unable to load alumni.')}</p>`);
+    return;
+  }
+
+  if (!alumniPaging[target]) alumniPaging[target] = { page: 1, pageSize: alumniPageSize(target), items: [] };
+  alumniPaging[target].items = Array.isArray(data.data) ? data.data : [];
+  alumniPaging[target].pageSize = alumniPageSize(target);
+  alumniPaging[target].page = 1;
+  renderAlumniPage(target);
+  if (page === 'admin') adminState.alumni = alumniPaging[target].items;
 }
 
 async function login() {
@@ -407,6 +472,21 @@ function wireEvents() {
     }
     const edit = event.target.closest('[data-edit]');
     const del = event.target.closest('[data-delete]');
+    const pageControl = event.target.closest('[data-alumni-page]');
+    if (pageControl && !pageControl.disabled) {
+      const target = pageControl.dataset.alumniPageTarget;
+      const state = alumniPaging[target];
+      if (!state) return;
+      const pageCount = Math.max(1, Math.ceil(state.items.length / state.pageSize));
+      const nextPage = {
+        first: 1,
+        prev: state.page - 1,
+        next: state.page + 1,
+        last: pageCount,
+      }[pageControl.dataset.alumniPage];
+      if (nextPage) setAlumniPage(target, nextPage);
+      return;
+    }
     if (edit?.disabled || del?.disabled) return;
     if (edit) {
       const type = edit.dataset.edit;
