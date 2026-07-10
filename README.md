@@ -4,13 +4,6 @@ Site repository for the **NUST KSA Chapter Alumni Association Website**. This be
 
 ---
 
-## 📺 Project Demo & Preview
-
-### Interactive Demo Video
-A full system walk-through is available for viewing. Please click the link below to watch the demo:
-
-[▶️ Watch the System Demo Video](https://stnustksaalumni.blob.core.windows.net/site-images/nust-ksa-site-demo.mp4)
-
 ### Application Screenshot
 *Below is a preview of the NUST KSA Alumni Portal Home Dashboard:*
 
