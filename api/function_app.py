@@ -24,7 +24,7 @@ from azure.storage.blob import BlobServiceClient, ContentSettings
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
-UNIVERSITY_ID = "NUST-KSA"
+COMMUNITY_ID = os.getenv("COMMUNITY_ID", "NUST-KSA")
 SESSION_HOURS = 8
 
 TABLE_USERS = "UserAccounts"
@@ -157,7 +157,7 @@ def get_user(email: str) -> Optional[Dict[str, Any]]:
     if not email:
         return None
     try:
-        return dict(table(TABLE_USERS).get_entity(partition_key=UNIVERSITY_ID, row_key=email))
+        return dict(table(TABLE_USERS).get_entity(partition_key=COMMUNITY_ID, row_key=email))
     except ResourceNotFoundError:
         return None
 
@@ -168,7 +168,7 @@ def save_user(email: str, full_name: str, password: str, role: str = ROLE_READER
         raise ValueError("Email and password are required.")
     role = clean(role).lower() or ROLE_READER
     entity = {
-        "PartitionKey": UNIVERSITY_ID,
+        "PartitionKey": COMMUNITY_ID,
         "RowKey": email,
         "user_id": str(uuid4()),
         "email": email,
@@ -206,7 +206,7 @@ def sync_alumni_user(alumni: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     existing = get_user(email) or {}
     entity = {
         **existing,
-        "PartitionKey": UNIVERSITY_ID,
+        "PartitionKey": COMMUNITY_ID,
         "RowKey": email,
         "user_id": clean(existing.get("user_id")) or str(uuid4()),
         "email": email,
@@ -229,7 +229,7 @@ def create_session(user: Dict[str, Any], req: func.HttpRequest) -> Dict[str, Any
     session_id = secrets.token_urlsafe(32)
     role = clean(user.get("role") or ROLE_ALUMNI).lower()
     entity = {
-        "PartitionKey": UNIVERSITY_ID,
+        "PartitionKey": COMMUNITY_ID,
         "RowKey": session_id,
         "session_id": session_id,
         "email": normalize_email(user.get("email") or user.get("RowKey")),
@@ -262,7 +262,7 @@ def current_user(req: func.HttpRequest) -> Optional[Dict[str, Any]]:
     if not sid:
         return None
     try:
-        session = dict(table(TABLE_SESSIONS).get_entity(partition_key=UNIVERSITY_ID, row_key=sid))
+        session = dict(table(TABLE_SESSIONS).get_entity(partition_key=COMMUNITY_ID, row_key=sid))
     except ResourceNotFoundError:
         return None
     if session.get("revoked"):
@@ -305,7 +305,7 @@ def require_role(req: func.HttpRequest, allowed: Iterable[str]) -> Dict[str, Any
 def list_table_rows(table_name: str) -> List[Dict[str, Any]]:
     rows = table(table_name).query_entities(
         query_filter="PartitionKey eq @partition",
-        parameters={"partition": UNIVERSITY_ID},
+        parameters={"partition": COMMUNITY_ID},
     )
     return [dict(row) for row in rows]
 
@@ -340,7 +340,7 @@ def get_table_item(table_name: str, item_id: str) -> Dict[str, Any]:
     if not item_id:
         raise ValueError("Item id is required.")
     try:
-        return dict(table(table_name).get_entity(partition_key=UNIVERSITY_ID, row_key=item_id))
+        return dict(table(table_name).get_entity(partition_key=COMMUNITY_ID, row_key=item_id))
     except ResourceNotFoundError:
         raise ValueError("Item not found.")
 
@@ -349,7 +349,7 @@ def create_content(req: func.HttpRequest, table_name: str, category: str, user: 
     data = body(req)
     item_id = clean(data.get("id")) or str(uuid4())
     entity = {
-        "PartitionKey": UNIVERSITY_ID,
+        "PartitionKey": COMMUNITY_ID,
         "RowKey": item_id,
         "id": item_id,
         "title": clean(data.get("title")),
@@ -404,7 +404,7 @@ def delete_item(table_name: str, item_id: str) -> None:
     if not item_id:
         raise ValueError("Item id is required.")
     try:
-        table(table_name).delete_entity(partition_key=UNIVERSITY_ID, row_key=item_id)
+        table(table_name).delete_entity(partition_key=COMMUNITY_ID, row_key=item_id)
     except ResourceNotFoundError:
         raise ValueError("Item not found.")
 
@@ -418,7 +418,7 @@ def upsert_alumni(data: Dict[str, Any], alumni_id: str = "") -> Dict[str, Any]:
         pass
     entity = {
         **existing,
-        "PartitionKey": UNIVERSITY_ID,
+        "PartitionKey": COMMUNITY_ID,
         "RowKey": alumni_id,
         "alumni_id": alumni_id,
         "full_name": clean(data.get("full_name", existing.get("full_name", ""))),
@@ -453,7 +453,13 @@ def upsert_alumni(data: Dict[str, Any], alumni_id: str = "") -> Dict[str, Any]:
 
 @app.route(route="health", methods=["GET"])
 def health(req: func.HttpRequest) -> func.HttpResponse:
-    return ok({"version": "kiss-session-v1"}, "NUST Alumni API is running")
+    return ok(
+        {
+            "version": "vcnity-dev-v1",
+            "community_id": COMMUNITY_ID
+        },
+        "VCNITY Community Hub API is running"
+    )
 
 
 @app.route(route="register", methods=["POST"])
@@ -487,7 +493,7 @@ def logout(req: func.HttpRequest) -> func.HttpResponse:
     if sid:
         try:
             t = table(TABLE_SESSIONS)
-            session = dict(t.get_entity(partition_key=UNIVERSITY_ID, row_key=sid))
+            session = dict(t.get_entity(partition_key=COMMUNITY_ID, row_key=sid))
             session["revoked"] = True
             session["revoked_at"] = utc_now_text()
             t.upsert_entity(session)
@@ -678,13 +684,8 @@ def admin_summary_response(req: func.HttpRequest) -> func.HttpResponse:
         return fail(str(e), 400)
 
 
-@app.route(route="admin/summary", methods=["GET"])
-def admin_summary(req: func.HttpRequest) -> func.HttpResponse:
-    return admin_summary_response(req)
-
-
-@app.route(route="admin-summary", methods=["GET"])
-def admin_summary_alias(req: func.HttpRequest) -> func.HttpResponse:
+@app.route(route="dashboard/summary", methods=["GET"])
+def dashboard_summary(req: func.HttpRequest) -> func.HttpResponse:
     return admin_summary_response(req)
 
 
