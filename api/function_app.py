@@ -450,6 +450,62 @@ def upsert_alumni(data: Dict[str, Any], alumni_id: str = "") -> Dict[str, Any]:
     sync_alumni_user(entity)
     return public_alumni(entity)
 
+def delete_alumni_and_user(alumni_id: str) -> None:
+    alumni_id = clean(alumni_id)
+
+    if not alumni_id:
+        raise ValueError("Member id is required.")
+
+    # Get the profile first so we know which login account belongs to it.
+    try:
+        profile = dict(
+            table(TABLE_ALUMNI).get_entity(
+                partition_key=COMMUNITY_ID,
+                row_key=alumni_id,
+            )
+        )
+    except ResourceNotFoundError:
+        raise ValueError("Member not found.")
+
+    email = normalize_email(profile.get("email", ""))
+
+    # Delete member profile.
+    table(TABLE_ALUMNI).delete_entity(
+        partition_key=COMMUNITY_ID,
+        row_key=alumni_id,
+    )
+
+    # Delete linked UserAccounts record.
+    if email:
+        try:
+            table(TABLE_USERS).delete_entity(
+                partition_key=COMMUNITY_ID,
+                row_key=email,
+            )
+        except ResourceNotFoundError:
+            pass
+
+        # Delete any existing sessions belonging to this user.
+        sessions_table = table(TABLE_SESSIONS)
+
+        sessions = sessions_table.query_entities(
+            query_filter=(
+                "PartitionKey eq @partition and email eq @email"
+            ),
+            parameters={
+                "partition": COMMUNITY_ID,
+                "email": email,
+            },
+        )
+
+        for session in sessions:
+            try:
+                sessions_table.delete_entity(
+                    partition_key=COMMUNITY_ID,
+                    row_key=session["RowKey"],
+                )
+            except ResourceNotFoundError:
+                pass
 
 @app.route(route="health", methods=["GET"])
 def health(req: func.HttpRequest) -> func.HttpResponse:
@@ -611,16 +667,29 @@ def alumni(req: func.HttpRequest) -> func.HttpResponse:
 def alumni_item(req: func.HttpRequest) -> func.HttpResponse:
     try:
         require_role(req, [ROLE_ADMIN])
+
         alumni_id = req.route_params.get("alumni_id", "")
+
         if req.method == "DELETE":
-            delete_item(TABLE_ALUMNI, alumni_id)
-            return ok({}, "Alumni profile deleted.")
-        return ok(upsert_alumni(body(req), alumni_id), "Alumni profile updated.")
+            delete_alumni_and_user(alumni_id)
+            return ok(
+                {},
+                "Member profile and linked account deleted."
+            )
+
+        return ok(
+            upsert_alumni(body(req), alumni_id),
+            "Member profile updated."
+        )
+
     except PermissionError as e:
-        return fail(str(e), 401 if str(e) == "Login required" else 403)
+        return fail(
+            str(e),
+            401 if str(e) == "Login required" else 403,
+        )
+
     except Exception as e:
         return fail(str(e), 400)
-
 
 @app.route(route="media/upload", methods=["POST"])
 def upload(req: func.HttpRequest) -> func.HttpResponse:
