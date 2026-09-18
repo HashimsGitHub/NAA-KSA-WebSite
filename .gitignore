@@ -8,3 +8,4 @@ node_modules/
 api/local.settings.json
 local.settings.json
 .cht*:Zone.Identifier
+.cht
