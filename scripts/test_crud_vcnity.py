@@ -150,42 +150,459 @@ def test_knowledge(session_id, token):
 
 def test_members(session_id, token):
     member_id = f"crud-member-{token}"
-    email = f"crud-{token}@example.com"
+
+    original_email = f"crud-{token}@example.com"
+    original_mobile = "0400000999"
+
+    new_email = f"crud-updated-{token}@example.com"
+    new_mobile = "0400000888"
+
     created = False
+
     print("\n=== Community Member CRUD ===")
+
     try:
-        member = {"alumni_id": member_id, "full_name": f"CRUD Test Member {token}", "email": email, "mobile": "0400000999", "city": "Brisbane", "country": "Australia", "degree": "Community Member", "department": "Test Community", "graduation_year": "2026", "current_company": "VCNITY Test Organisation", "current_position": "Test Member", "industry": "Community", "linkedin_url": "", "bio": "Temporary member created by the automated CRUD suite.", "skills": "testing,community", "profile_image_url": "", "role": "alumni", "status": "active", "visibility": "visible", "show_email": True, "show_mobile": False}
-        status, payload = api("POST", "/alumni", member, session_id)
-        created = bool(payload_data(status, payload, 201, "Members CREATE"))
-        status, payload = api("GET", "/alumni", session_id=session_id)
-        items = payload_data(status, payload, 200, "Members READ list")
-        check(find_id(items, "alumni_id", member_id) is not None, "Members READ created record")
-        update = {"full_name": f"CRUD Test Member UPDATED {token}", "city": "Logan", "current_position": "Updated Test Role", "skills": "testing,community,updated"}
-        status, payload = api("PUT", f"/alumni/{member_id}", update, session_id)
-        data = payload_data(status, payload, 200, "Members UPDATE")
+        # -------------------------------------------------
+        # CREATE
+        # -------------------------------------------------
+        member = {
+            "alumni_id": member_id,
+            "full_name": f"CRUD Test Member {token}",
+            "email": original_email,
+            "mobile": original_mobile,
+            "city": "Brisbane",
+            "country": "Australia",
+            "degree": "Community Member",
+            "department": "Test Community",
+            "graduation_year": "2026",
+            "current_company": "VCNITY Test Organisation",
+            "current_position": "Test Member",
+            "industry": "Community",
+            "linkedin_url": "",
+            "bio": "Temporary member created by the automated CRUD suite.",
+            "skills": "testing,community",
+            "profile_image_url": "",
+            "role": "alumni",
+            "status": "active",
+            "visibility": "visible",
+            "show_email": True,
+            "show_mobile": False,
+        }
+
+        status, payload = api(
+            "POST",
+            "/alumni",
+            member,
+            session_id,
+        )
+
+        created = bool(
+            payload_data(
+                status,
+                payload,
+                201,
+                "Members CREATE",
+            )
+        )
+
+        # -------------------------------------------------
+        # READ CREATED MEMBER
+        # -------------------------------------------------
+        status, payload = api(
+            "GET",
+            "/alumni",
+            session_id=session_id,
+        )
+
+        items = payload_data(
+            status,
+            payload,
+            200,
+            "Members READ list",
+        )
+
+        check(
+            find_id(items, "alumni_id", member_id) is not None,
+            "Members READ created record",
+        )
+
+        # -------------------------------------------------
+        # VERIFY INITIAL LOGIN
+        # username = email
+        # password = mobile
+        # -------------------------------------------------
+        status, payload = api(
+            "POST",
+            "/auth/login",
+            {
+                "email": original_email,
+                "password": original_mobile,
+            },
+        )
+
+        check(
+            status == 200 and payload.get("success") is True,
+            "Member initial login works with email/mobile",
+            f"HTTP {status}: {payload}",
+        )
+
+        # -------------------------------------------------
+        # NORMAL PROFILE UPDATE
+        # -------------------------------------------------
+        update = {
+            "full_name": f"CRUD Test Member UPDATED {token}",
+            "city": "Logan",
+            "current_position": "Updated Test Role",
+            "skills": "testing,community,updated",
+        }
+
+        status, payload = api(
+            "PUT",
+            f"/alumni/{member_id}",
+            update,
+            session_id,
+        )
+
+        data = payload_data(
+            status,
+            payload,
+            200,
+            "Members UPDATE",
+        )
+
         if data:
-            check(data.get("full_name") == update["full_name"], "Members UPDATE name")
-            check(data.get("city") == "Logan", "Members UPDATE city")
-        status, payload = api("GET", "/alumni", session_id=session_id)
-        items = payload_data(status, payload, 200, "Members READ after update")
-        found = find_id(items, "alumni_id", member_id)
-        check(bool(found and found.get("current_position") == "Updated Test Role"), "Members READ verifies update")
-        status, payload = api("DELETE", f"/alumni/{member_id}", session_id=session_id)
-        payload_data(status, payload, 200, "Members DELETE")
+            check(
+                data.get("full_name") == update["full_name"],
+                "Members UPDATE name",
+            )
+
+            check(
+                data.get("city") == "Logan",
+                "Members UPDATE city",
+            )
+
+        # -------------------------------------------------
+        # VERIFY NORMAL UPDATE
+        # -------------------------------------------------
+        status, payload = api(
+            "GET",
+            "/alumni",
+            session_id=session_id,
+        )
+
+        items = payload_data(
+            status,
+            payload,
+            200,
+            "Members READ after update",
+        )
+
+        found = find_id(
+            items,
+            "alumni_id",
+            member_id,
+        )
+
+        check(
+            bool(
+                found
+                and found.get("current_position")
+                == "Updated Test Role"
+            ),
+            "Members READ verifies update",
+        )
+
+        # -------------------------------------------------
+        # CHANGE EMAIL + MOBILE
+        #
+        # Expected:
+        # username changes to new_email
+        # password changes to new_mobile
+        # old UserAccounts record removed
+        # -------------------------------------------------
+        credential_update = {
+            "email": new_email,
+            "mobile": new_mobile,
+        }
+
+        status, payload = api(
+            "PUT",
+            f"/alumni/{member_id}",
+            credential_update,
+            session_id,
+        )
+
+        data = payload_data(
+            status,
+            payload,
+            200,
+            "Members UPDATE email/mobile",
+        )
+
+        if data:
+            check(
+                data.get("email") == new_email,
+                "Members UPDATE email verified",
+            )
+
+            # show_mobile=False means the public member
+            # response should not expose the mobile number.
+            check(
+                data.get("mobile", "") == "",
+                "Member mobile remains hidden publicly",
+            )
+
+        # -------------------------------------------------
+        # VERIFY MEMBER PROFILE NOW USES NEW EMAIL
+        # -------------------------------------------------
+        status, payload = api(
+            "GET",
+            "/alumni",
+            session_id=session_id,
+        )
+
+        items = payload_data(
+            status,
+            payload,
+            200,
+            "Members READ after email/mobile update",
+        )
+
+        found = find_id(
+            items,
+            "alumni_id",
+            member_id,
+        )
+
+        check(
+            bool(
+                found
+                and found.get("email") == new_email
+            ),
+            "Member profile contains new email",
+        )
+
+        # -------------------------------------------------
+        # VERIFY USERACCOUNTS INTEGRITY
+        # -------------------------------------------------
+        status, payload = api(
+            "GET",
+            "/users",
+            session_id=session_id,
+        )
+
+        users = payload_data(
+            status,
+            payload,
+            200,
+            "Users READ after member email change",
+        )
+
+        old_account = find_id(
+            users,
+            "email",
+            original_email,
+        )
+
+        new_account = find_id(
+            users,
+            "email",
+            new_email,
+        )
+
+        check(
+            old_account is None,
+            "Old member login removed after email change",
+        )
+
+        check(
+            new_account is not None,
+            "New member login created after email change",
+        )
+
+        if new_account:
+            check(
+                new_account.get("mobile") == new_mobile,
+                "User account contains updated mobile",
+            )
+
+            check(
+                new_account.get("role") == "alumni",
+                "Member role preserved after email change",
+            )
+
+            check(
+                new_account.get("status") == "approved",
+                "Member login remains approved",
+            )
+
+        # -------------------------------------------------
+        # VERIFY NEW CREDENTIALS WORK
+        # -------------------------------------------------
+        status, payload = api(
+            "POST",
+            "/auth/login",
+            {
+                "email": new_email,
+                "password": new_mobile,
+            },
+        )
+
+        check(
+            status == 200 and payload.get("success") is True,
+            "Member login works with new email/mobile",
+            f"HTTP {status}: {payload}",
+        )
+
+        # -------------------------------------------------
+        # VERIFY OLD EMAIL + OLD MOBILE NO LONGER WORK
+        # -------------------------------------------------
+        status, payload = api(
+            "POST",
+            "/auth/login",
+            {
+                "email": original_email,
+                "password": original_mobile,
+            },
+        )
+
+        check(
+            status == 401,
+            "Old member credentials rejected after email change",
+            f"HTTP {status}: {payload}",
+        )
+
+        # -------------------------------------------------
+        # VERIFY NEW EMAIL + OLD MOBILE ALSO FAILS
+        #
+        # This proves the password changed when mobile changed.
+        # -------------------------------------------------
+        status, payload = api(
+            "POST",
+            "/auth/login",
+            {
+                "email": new_email,
+                "password": original_mobile,
+            },
+        )
+
+        check(
+            status == 401,
+            "Old mobile password rejected after mobile change",
+            f"HTTP {status}: {payload}",
+        )
+
+        # -------------------------------------------------
+        # DELETE MEMBER
+        # -------------------------------------------------
+        status, payload = api(
+            "DELETE",
+            f"/alumni/{member_id}",
+            session_id=session_id,
+        )
+
+        payload_data(
+            status,
+            payload,
+            200,
+            "Members DELETE",
+        )
+
         created = False
-        status, payload = api("GET", "/alumni", session_id=session_id)
-        items = payload_data(status, payload, 200, "Members READ after delete")
-        check(find_id(items, "alumni_id", member_id) is None, "Members DELETE profile verified")
-        status, payload = api("GET", "/users", session_id=session_id)
-        users = payload_data(status, payload, 200, "Users READ for orphan-account check")
-        orphan = find_id(users, "email", email)
-        if orphan:
-            warn("Member DELETE left a linked UserAccounts row", f"{email} still exists in UserAccounts. Profile deletion is not cascading.")
-        else:
-            check(True, "Member DELETE removed linked user account")
+
+        # -------------------------------------------------
+        # VERIFY PROFILE DELETED
+        # -------------------------------------------------
+        status, payload = api(
+            "GET",
+            "/alumni",
+            session_id=session_id,
+        )
+
+        items = payload_data(
+            status,
+            payload,
+            200,
+            "Members READ after delete",
+        )
+
+        check(
+            find_id(
+                items,
+                "alumni_id",
+                member_id,
+            )
+            is None,
+            "Members DELETE profile verified",
+        )
+
+        # -------------------------------------------------
+        # VERIFY LINKED USERACCOUNT ALSO DELETED
+        #
+        # Important: check new_email because that is now
+        # the member's current login identity.
+        # -------------------------------------------------
+        status, payload = api(
+            "GET",
+            "/users",
+            session_id=session_id,
+        )
+
+        users = payload_data(
+            status,
+            payload,
+            200,
+            "Users READ after member delete",
+        )
+
+        orphan_new = find_id(
+            users,
+            "email",
+            new_email,
+        )
+
+        orphan_old = find_id(
+            users,
+            "email",
+            original_email,
+        )
+
+        check(
+            orphan_new is None,
+            "Member DELETE removed current linked user account",
+        )
+
+        check(
+            orphan_old is None,
+            "No old-email user account remains",
+        )
+
+        # -------------------------------------------------
+        # VERIFY DELETED MEMBER CAN NO LONGER LOGIN
+        # -------------------------------------------------
+        status, payload = api(
+            "POST",
+            "/auth/login",
+            {
+                "email": new_email,
+                "password": new_mobile,
+            },
+        )
+
+        check(
+            status == 401,
+            "Deleted member login rejected",
+            f"HTTP {status}: {payload}",
+        )
+
     finally:
+        # Emergency cleanup if the test fails halfway through.
         if created:
-            api("DELETE", f"/alumni/{member_id}", session_id=session_id)
+            api(
+                "DELETE",
+                f"/alumni/{member_id}",
+                session_id=session_id,
+            )
 
 
 def test_dashboard(session_id):

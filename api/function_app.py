@@ -196,34 +196,169 @@ def alumni_status_to_user_status(value: Any) -> str:
         return "suspended"
     return status
 
+def delete_sessions_for_email(
+    email: str,
+) -> None:
 
-def sync_alumni_user(alumni: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    email = normalize_email(email)
+
+    if not email:
+        return
+
+    sessions_table = table(
+        TABLE_SESSIONS
+    )
+
+    rows = sessions_table.query_entities(
+        query_filter=(
+            "PartitionKey eq @partition "
+            "and email eq @email"
+        ),
+        parameters={
+            "partition": COMMUNITY_ID,
+            "email": email,
+        },
+    )
+
+    for session in rows:
+        try:
+            sessions_table.delete_entity(
+                partition_key=COMMUNITY_ID,
+                row_key=session["RowKey"],
+            )
+        except ResourceNotFoundError:
+            pass
+        
+def sync_alumni_user(
+    alumni: Dict[str, Any],
+    previous_email: str = "",
+    previous_mobile: str = "",
+) -> Optional[Dict[str, Any]]:
+
     email = normalize_email(alumni.get("email", ""))
     mobile = clean(alumni.get("mobile"))
+
+    previous_email = normalize_email(previous_email)
+    previous_mobile = clean(previous_mobile)
+
     if not email or not mobile:
         return None
 
-    existing = get_user(email) or {}
+    email_changed = bool(
+        previous_email
+        and previous_email != email
+    )
+
+    mobile_changed = bool(
+        previous_mobile
+        and previous_mobile != mobile
+    )
+
+    users_table = table(TABLE_USERS)
+
+    # Preserve identity information from the old account if
+    # the member's email/username has changed.
+    old_user: Dict[str, Any] = {}
+
+    if email_changed:
+        try:
+            old_user = dict(
+                users_table.get_entity(
+                    partition_key=COMMUNITY_ID,
+                    row_key=previous_email,
+                )
+            )
+        except ResourceNotFoundError:
+            old_user = {}
+
+    # There may already be an account using the new email.
+    existing_new_user = get_user(email) or {}
+
+    # Prefer the existing account at the new email.
+    # Otherwise preserve the old account's identity fields.
+    existing = existing_new_user or old_user
+
     entity = {
         **existing,
+
         "PartitionKey": COMMUNITY_ID,
         "RowKey": email,
-        "user_id": clean(existing.get("user_id")) or str(uuid4()),
+
+        "user_id": (
+            clean(existing.get("user_id"))
+            or str(uuid4())
+        ),
+
         "email": email,
-        "full_name": clean(alumni.get("full_name")) or clean(existing.get("full_name")) or email,
+
+        "full_name": (
+            clean(alumni.get("full_name"))
+            or clean(existing.get("full_name"))
+            or email
+        ),
+
         "mobile": mobile,
-        "role": normalize_user_role(alumni.get("role")),
-        "status": alumni_status_to_user_status(alumni.get("status") or existing.get("status")),
-        "auth_method": clean(existing.get("auth_method")) or "password",
+
+        "role": normalize_user_role(
+            alumni.get("role")
+        ),
+
+        "status": alumni_status_to_user_status(
+            alumni.get("status")
+            or existing.get("status")
+        ),
+
+        "auth_method": "password",
+
+        # Current VCNITY authentication strategy:
+        # username = email
+        # password = mobile number
         "password_hash": hash_password(mobile),
-        "password_reset_required": bool(existing.get("password_reset_required", False)),
-        "linked_alumni_id": clean(alumni.get("alumni_id") or existing.get("linked_alumni_id")),
-        "created_at": clean(existing.get("created_at")) or utc_now_text(),
+
+        "password_reset_required": False,
+
+        "linked_alumni_id": clean(
+            alumni.get("alumni_id")
+            or existing.get("linked_alumni_id")
+        ),
+
+        "created_at": (
+            clean(existing.get("created_at"))
+            or utc_now_text()
+        ),
+
         "updated_at": utc_now_text(),
     }
-    table(TABLE_USERS).upsert_entity(entity)
-    return entity
 
+    # -------------------------------------------------
+    # Save account under CURRENT email
+    # -------------------------------------------------
+    users_table.upsert_entity(entity)
+
+    # -------------------------------------------------
+    # Email changed:
+    # remove OLD username/account and sessions
+    # -------------------------------------------------
+    if email_changed:
+        try:
+            users_table.delete_entity(
+                partition_key=COMMUNITY_ID,
+                row_key=previous_email,
+            )
+        except ResourceNotFoundError:
+            pass
+
+        delete_sessions_for_email(previous_email)
+
+    # -------------------------------------------------
+    # Mobile changed:
+    # password changed, therefore invalidate any
+    # sessions belonging to the current/new email.
+    # -------------------------------------------------
+    if mobile_changed:
+        delete_sessions_for_email(email)
+
+    return entity
 
 def create_session(user: Dict[str, Any], req: func.HttpRequest) -> Dict[str, Any]:
     session_id = secrets.token_urlsafe(32)
@@ -285,6 +420,30 @@ def current_user(req: func.HttpRequest) -> Optional[Dict[str, Any]]:
         "session_id": sid,
     }
 
+def delete_sessions_for_email(email: str) -> None:
+    email = normalize_email(email)
+
+    if not email:
+        return
+
+    sessions_table = table(TABLE_SESSIONS)
+
+    rows = sessions_table.query_entities(
+        query_filter="PartitionKey eq @partition and email eq @email",
+        parameters={
+            "partition": COMMUNITY_ID,
+            "email": email,
+        },
+    )
+
+    for session in rows:
+        try:
+            sessions_table.delete_entity(
+                partition_key=COMMUNITY_ID,
+                row_key=session["RowKey"],
+            )
+        except ResourceNotFoundError:
+            pass
 
 def require_login(req: func.HttpRequest) -> Dict[str, Any]:
     user = current_user(req)
@@ -409,45 +568,249 @@ def delete_item(table_name: str, item_id: str) -> None:
         raise ValueError("Item not found.")
 
 
-def upsert_alumni(data: Dict[str, Any], alumni_id: str = "") -> Dict[str, Any]:
-    alumni_id = clean(alumni_id or data.get("alumni_id")) or str(uuid4())
+def upsert_alumni(
+    data: Dict[str, Any],
+    alumni_id: str = "",
+) -> Dict[str, Any]:
+
+    alumni_id = (
+        clean(alumni_id or data.get("alumni_id"))
+        or str(uuid4())
+    )
+
+    # -------------------------------------------------
+    # Load the EXISTING profile BEFORE changing anything.
+    # This is critical for detecting email/mobile changes.
+    # -------------------------------------------------
     existing: Dict[str, Any] = {}
+
     try:
-        existing = get_table_item(TABLE_ALUMNI, alumni_id)
+        existing = get_table_item(
+            TABLE_ALUMNI,
+            alumni_id,
+        )
     except ValueError:
         pass
+
+    # Capture previous credentials BEFORE constructing
+    # or saving the updated member profile.
+    previous_email = normalize_email(
+        existing.get("email", "")
+    )
+
+    previous_mobile = clean(
+        existing.get("mobile", "")
+    )
+
+    # -------------------------------------------------
+    # Build updated member entity
+    # -------------------------------------------------
     entity = {
         **existing,
+
         "PartitionKey": COMMUNITY_ID,
         "RowKey": alumni_id,
+
         "alumni_id": alumni_id,
-        "full_name": clean(data.get("full_name", existing.get("full_name", ""))),
-        "email": normalize_email(data.get("email", existing.get("email", ""))),
-        "mobile": clean(data.get("mobile", existing.get("mobile", ""))),
-        "city": clean(data.get("city", existing.get("city", ""))),
-        "country": clean(data.get("country", existing.get("country", ""))),
-        "degree": clean(data.get("degree", existing.get("degree", ""))),
-        "department": clean(data.get("department", existing.get("department", ""))),
-        "graduation_year": clean(data.get("graduation_year", existing.get("graduation_year", ""))),
-        "current_company": clean(data.get("current_company", existing.get("current_company", ""))),
-        "current_position": clean(data.get("current_position", existing.get("current_position", ""))),
-        "industry": clean(data.get("industry", existing.get("industry", ""))),
-        "linkedin_url": clean(data.get("linkedin_url", existing.get("linkedin_url", ""))),
-        "bio": clean(data.get("bio", existing.get("bio", ""))),
-        "skills": clean(data.get("skills", existing.get("skills", ""))),
-        "profile_image_url": clean(data.get("profile_image_url", existing.get("profile_image_url", ""))),
-        "role": normalize_user_role(data.get("role", existing.get("role", ROLE_ALUMNI))),
-        "status": clean(data.get("status", existing.get("status", "active")) or "active"),
-        "visibility": clean(data.get("visibility", existing.get("visibility", "visible")) or "visible"),
-        "show_email": bool(data.get("show_email", existing.get("show_email", True))),
-        "show_mobile": bool(data.get("show_mobile", existing.get("show_mobile", False))),
-        "created_at": clean(existing.get("created_at")) or utc_now_text(),
+
+        "full_name": clean(
+            data.get(
+                "full_name",
+                existing.get("full_name", ""),
+            )
+        ),
+
+        "email": normalize_email(
+            data.get(
+                "email",
+                existing.get("email", ""),
+            )
+        ),
+
+        "mobile": clean(
+            data.get(
+                "mobile",
+                existing.get("mobile", ""),
+            )
+        ),
+
+        "city": clean(
+            data.get(
+                "city",
+                existing.get("city", ""),
+            )
+        ),
+
+        "country": clean(
+            data.get(
+                "country",
+                existing.get("country", ""),
+            )
+        ),
+
+        "degree": clean(
+            data.get(
+                "degree",
+                existing.get("degree", ""),
+            )
+        ),
+
+        "department": clean(
+            data.get(
+                "department",
+                existing.get("department", ""),
+            )
+        ),
+
+        "graduation_year": clean(
+            data.get(
+                "graduation_year",
+                existing.get("graduation_year", ""),
+            )
+        ),
+
+        "current_company": clean(
+            data.get(
+                "current_company",
+                existing.get("current_company", ""),
+            )
+        ),
+
+        "current_position": clean(
+            data.get(
+                "current_position",
+                existing.get("current_position", ""),
+            )
+        ),
+
+        "industry": clean(
+            data.get(
+                "industry",
+                existing.get("industry", ""),
+            )
+        ),
+
+        "linkedin_url": clean(
+            data.get(
+                "linkedin_url",
+                existing.get("linkedin_url", ""),
+            )
+        ),
+
+        "bio": clean(
+            data.get(
+                "bio",
+                existing.get("bio", ""),
+            )
+        ),
+
+        "skills": clean(
+            data.get(
+                "skills",
+                existing.get("skills", ""),
+            )
+        ),
+
+        "profile_image_url": clean(
+            data.get(
+                "profile_image_url",
+                existing.get("profile_image_url", ""),
+            )
+        ),
+
+        "role": normalize_user_role(
+            data.get(
+                "role",
+                existing.get(
+                    "role",
+                    ROLE_ALUMNI,
+                ),
+            )
+        ),
+
+        "status": clean(
+            data.get(
+                "status",
+                existing.get(
+                    "status",
+                    "active",
+                ),
+            )
+            or "active"
+        ),
+
+        "visibility": clean(
+            data.get(
+                "visibility",
+                existing.get(
+                    "visibility",
+                    "visible",
+                ),
+            )
+            or "visible"
+        ),
+
+        "show_email": bool(
+            data.get(
+                "show_email",
+                existing.get(
+                    "show_email",
+                    True,
+                ),
+            )
+        ),
+
+        "show_mobile": bool(
+            data.get(
+                "show_mobile",
+                existing.get(
+                    "show_mobile",
+                    False,
+                ),
+            )
+        ),
+
+        "created_at": (
+            clean(existing.get("created_at"))
+            or utc_now_text()
+        ),
+
         "updated_at": utc_now_text(),
     }
+
     if not entity["full_name"]:
-        raise ValueError("Full name is required.")
+        raise ValueError(
+            "Full name is required."
+        )
+
+    if not entity["email"]:
+        raise ValueError(
+            "Email is required."
+        )
+
+    if not entity["mobile"]:
+        raise ValueError(
+            "Mobile number is required."
+        )
+
+    # -------------------------------------------------
+    # Save updated member profile
+    # -------------------------------------------------
     table(TABLE_ALUMNI).upsert_entity(entity)
-    sync_alumni_user(entity)
+
+    # -------------------------------------------------
+    # Synchronise login account.
+    #
+    # IMPORTANT:
+    # previous_email and previous_mobile were captured
+    # before the profile was updated.
+    # -------------------------------------------------
+    sync_alumni_user(
+        entity,
+        previous_email=previous_email,
+        previous_mobile=previous_mobile,
+    )
+
     return public_alumni(entity)
 
 def delete_alumni_and_user(alumni_id: str) -> None:
@@ -456,7 +819,6 @@ def delete_alumni_and_user(alumni_id: str) -> None:
     if not alumni_id:
         raise ValueError("Member id is required.")
 
-    # Get the profile first so we know which login account belongs to it.
     try:
         profile = dict(
             table(TABLE_ALUMNI).get_entity(
@@ -467,15 +829,17 @@ def delete_alumni_and_user(alumni_id: str) -> None:
     except ResourceNotFoundError:
         raise ValueError("Member not found.")
 
-    email = normalize_email(profile.get("email", ""))
+    email = normalize_email(
+        profile.get("email", "")
+    )
 
-    # Delete member profile.
+    # Delete profile
     table(TABLE_ALUMNI).delete_entity(
         partition_key=COMMUNITY_ID,
         row_key=alumni_id,
     )
 
-    # Delete linked UserAccounts record.
+    # Delete login
     if email:
         try:
             table(TABLE_USERS).delete_entity(
@@ -485,27 +849,8 @@ def delete_alumni_and_user(alumni_id: str) -> None:
         except ResourceNotFoundError:
             pass
 
-        # Delete any existing sessions belonging to this user.
-        sessions_table = table(TABLE_SESSIONS)
-
-        sessions = sessions_table.query_entities(
-            query_filter=(
-                "PartitionKey eq @partition and email eq @email"
-            ),
-            parameters={
-                "partition": COMMUNITY_ID,
-                "email": email,
-            },
-        )
-
-        for session in sessions:
-            try:
-                sessions_table.delete_entity(
-                    partition_key=COMMUNITY_ID,
-                    row_key=session["RowKey"],
-                )
-            except ResourceNotFoundError:
-                pass
+        # Delete sessions
+        delete_sessions_for_email(email)
 
 @app.route(route="health", methods=["GET"])
 def health(req: func.HttpRequest) -> func.HttpResponse:
