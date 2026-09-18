@@ -3,43 +3,85 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Alumni Directory | NUST Alumni Association</title>
+  <meta name="description" content="Search the VCNITY member directory." />
+  <meta name="theme-color" content="#444157" />
+  <title>Member Directory | VCNITY</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body data-page="alumni">
-  <nav class="topnav">
-    <a class="brand" href="/"><img src="https://stnustksaalumni.blob.core.windows.net/site-images/NUST-logo.png" alt="NUST logo">NUST Alumni Association</a>
-    <a href="/">Home</a>
-    <a href="/pages/events.html">Events</a>
-    <a data-requires="user" href="/pages/alumni.html">Alumni Directory</a>
-    <a data-requires="user" href="/pages/blogs.html">Knowledge Base</a>
-    <a href="/pages/about.html">About</a>
-    <a href="/pages/charter.html">Charter</a>
-    <a data-requires="contributor" href="/pages/admin.html">Control Panel</a>
-    <a data-requires="guest" href="/pages/login.html">Login</a>
-    <button data-requires="user" id="logoutButton" class="link-button" type="button">Logout</button>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  <nav class="topnav" aria-label="Primary navigation">
+    <a class="brand" href="/" aria-label="VCNITY home">
+      <img src="/assets/vcnity/VCNITY_logo.png" alt="VCNITY" class="brand-logo" />
+    </a>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/pages/events.html">Events</a>
+      <a class="active" data-requires="user" href="/pages/alumni.html">Member Directory</a>
+      <a data-requires="user" href="/pages/blogs.html">Knowledge Hub</a>
+      <a href="/pages/about.html">About</a>
+      <a href="/pages/charter.html">Charter</a>
+      <a data-requires="contributor" href="/pages/admin.html">Admin</a>
+      <a data-requires="guest" class="nav-login" href="/pages/login.html">Login</a>
+      <button data-requires="user" id="logoutButton" class="link-button nav-login" type="button">Logout</button>
+    </div>
   </nav>
-  <main class="page-shell">
-    <section class="section-heading">
-      <p class="eyebrow">Members Only</p>
-      <h1>Alumni Directory</h1>
-      <p>Search approved, visible alumni profiles by name, degree, department, class year, city, company, country, or skills.</p>
+
+  <main id="main-content" class="page-shell">
+    <section class="page-intro">
+      <p class="eyebrow">Members only</p>
+      <h1>Member directory</h1>
+      <p>Find people, skills, organisations and community experience across VCNITY.</p>
     </section>
-    <section class="tool-panel">
+
+    <section class="tool-panel directory-search" aria-labelledby="member-search-heading">
+      <div class="tool-panel-heading">
+        <div>
+          <p class="eyebrow">Find a member</p>
+          <h2 id="member-search-heading">Search the community</h2>
+        </div>
+        <p class="muted">Use any combination of fields. Leave fields blank to browse all visible members.</p>
+      </div>
+
       <div class="grid">
-        <input id="qName" placeholder="Name" />
-        <input id="qGraduationYear" placeholder="Graduation year" />
-        <input id="qDegree" placeholder="Degree" />
-        <input id="qDepartment" placeholder="Department" />
-        <input id="qCompany" placeholder="Company" />
-        <input id="qCity" placeholder="City" />
-        <input id="qCountry" placeholder="Country" />
-        <input id="qSkills" placeholder="Skills" />
-        <button id="searchButton" type="button">Search</button>
+        <input id="qName" aria-label="Name" placeholder="Name" />
+        <input id="qGraduationYear" aria-label="Year joined" placeholder="Year joined" />
+        <input id="qDegree" aria-label="Member type" placeholder="Member type" />
+        <input id="qDepartment" aria-label="Community or group" placeholder="Community / group" />
+        <input id="qCompany" aria-label="Organisation" placeholder="Organisation" />
+        <input id="qCity" aria-label="City" placeholder="City" />
+        <input id="qCountry" aria-label="Country" placeholder="Country" />
+        <input id="qSkills" aria-label="Skills or interests" placeholder="Skills / interests" />
+        <button id="searchButton" type="button">Search members</button>
       </div>
     </section>
-    <div id="alumniList" class="cards"></div>
+
+    <section aria-labelledby="directory-results-heading">
+      <div class="section-heading">
+        <p class="eyebrow">Community network</p>
+        <h2 id="directory-results-heading">Directory results</h2>
+      </div>
+      <div id="alumniList" class="cards" aria-live="polite"></div>
+    </section>
   </main>
+
+  <footer class="site-footer">
+    <div class="page-shell footer-grid">
+      <div>
+        <a class="brand footer-brand" href="/">
+          <img src="/assets/vcnity/VCNITY_logo.png" alt="VCNITY" class="footer-logo" />
+        </a>
+        <p>A digital home for communities to connect, collaborate and share.</p>
+      </div>
+      <div class="footer-links">
+        <a href="/pages/events.html">Events</a>
+        <a href="/pages/about.html">About</a>
+        <a href="/pages/charter.html">Community Charter</a>
+      </div>
+    </div>
+  </footer>
+
   <script src="/app.js"></script>
 </body>
 </html>

@@ -3,30 +3,66 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Knowledge Base | NUST Alumni Association</title>
+  <meta name="description" content="VCNITY Knowledge Hub for shared community resources, guides and practical information." />
+  <meta name="theme-color" content="#444157" />
+  <title>Knowledge Hub | VCNITY</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body data-page="knowledge">
-  <nav class="topnav">
-    <a class="brand" href="/"><img src="https://stnustksaalumni.blob.core.windows.net/site-images/NUST-logo.png" alt="NUST logo">NUST Alumni Association</a>
-    <a href="/">Home</a>
-    <a href="/pages/events.html">Events</a>
-    <a data-requires="user" href="/pages/alumni.html">Alumni Directory</a>
-    <a data-requires="user" href="/pages/blogs.html">Knowledge Base</a>
-    <a href="/pages/about.html">About</a>
-    <a href="/pages/charter.html">Charter</a>
-    <a data-requires="contributor" href="/pages/admin.html">Control Panel</a>
-    <a data-requires="guest" href="/pages/login.html">Login</a>
-    <button data-requires="user" id="logoutButton" class="link-button" type="button">Logout</button>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  <nav class="topnav" aria-label="Primary navigation">
+    <a class="brand" href="/" aria-label="VCNITY home">
+      <img src="/assets/vcnity/VCNITY_logo.png" alt="VCNITY" class="brand-logo" />
+    </a>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/pages/events.html">Events</a>
+      <a data-requires="user" href="/pages/alumni.html">Member Directory</a>
+      <a class="active" data-requires="user" href="/pages/blogs.html">Knowledge Hub</a>
+      <a href="/pages/about.html">About</a>
+      <a href="/pages/charter.html">Charter</a>
+      <a data-requires="contributor" href="/pages/admin.html">Admin</a>
+      <a data-requires="guest" class="nav-login" href="/pages/login.html">Login</a>
+      <button data-requires="user" id="logoutButton" class="link-button nav-login" type="button">Logout</button>
+    </div>
   </nav>
-  <main class="page-shell">
-    <section class="section-heading">
-      <p class="eyebrow">Members Only</p>
-      <h1>Knowledge Base</h1>
-      <p>Guides, practical tips, and chapter resources for approved alumni.</p>
+
+  <main id="main-content" class="page-shell">
+    <section class="page-intro page-intro-knowledge">
+      <p class="eyebrow">Members only</p>
+      <h1>Knowledge Hub</h1>
+      <p>Shared guides, practical resources and community knowledge—kept together so useful information is easier to find and reuse.</p>
     </section>
-    <div id="knowledgeList" class="cards"></div>
+
+    <section aria-labelledby="knowledge-list-heading">
+      <div class="section-heading section-heading-row">
+        <div>
+          <p class="eyebrow">Shared knowledge</p>
+          <h2 id="knowledge-list-heading">Community resources</h2>
+        </div>
+        <a data-requires="contributor" class="text-link" href="/pages/admin.html">Manage resources <span aria-hidden="true">→</span></a>
+      </div>
+      <div id="knowledgeList" class="cards" aria-live="polite"></div>
+    </section>
   </main>
+
+  <footer class="site-footer">
+    <div class="page-shell footer-grid">
+      <div>
+        <a class="brand footer-brand" href="/">
+          <img src="/assets/vcnity/VCNITY_logo.png" alt="VCNITY" class="footer-logo" />
+        </a>
+        <p>A digital home for communities to connect, collaborate and share.</p>
+      </div>
+      <div class="footer-links">
+        <a href="/pages/events.html">Events</a>
+        <a href="/pages/about.html">About</a>
+        <a href="/pages/charter.html">Community Charter</a>
+      </div>
+    </div>
+  </footer>
+
   <script src="/app.js"></script>
 </body>
 </html>

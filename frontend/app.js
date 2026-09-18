@@ -121,7 +121,7 @@ function renderEvents(items, admin = false) {
 
 function renderKnowledge(items, admin = false) {
   const rows = Array.isArray(items) ? items : [];
-  if (!rows.length) return '<p class="notice">No knowledge-base articles have been published yet.</p>';
+  if (!rows.length) return '<p class="notice">No Knowledge Hub resources have been published yet.</p>';
   return rows.map((x) => `
     <article class="item">
       ${x.cover_image_url ? `<img src="${escapeHtml(x.cover_image_url)}" alt="${escapeHtml(x.title)}">` : ''}
@@ -137,14 +137,14 @@ function renderKnowledge(items, admin = false) {
 
 function renderAlumni(items, admin = false) {
   const rows = Array.isArray(items) ? items : [];
-  if (!rows.length) return '<p class="notice">No alumni matched the current filters.</p>';
+  if (!rows.length) return '<p class="notice">No members matched the current filters.</p>';
   const disableActions = page === 'admin' && !isAdmin();
   return rows.map((a) => `
     <article class="item alumni-item">
       ${a.profile_image_url ? `<img src="${escapeHtml(a.profile_image_url)}" alt="${escapeHtml(a.full_name)}">` : ''}
       <div class="item-body">
-        <span class="badge">${escapeHtml(a.graduation_year || 'Alumni')}</span>
-        <h3>${escapeHtml(a.full_name || 'Unnamed Alumni')}</h3>
+        <span class="badge">${escapeHtml(a.graduation_year || 'Member')}</span>
+        <h3>${escapeHtml(a.full_name || 'Unnamed member')}</h3>
         <p>${escapeHtml([a.degree, a.department].filter(Boolean).join(' - '))}</p>
         <p>${escapeHtml([a.current_position, a.current_company].filter(Boolean).join(' at '))}</p>
         <p class="meta">${escapeHtml([a.city, a.country].filter(Boolean).join(', '))}</p>
@@ -161,7 +161,7 @@ function alumniPageSize(target) {
 }
 
 function alumniTargetLabel(target) {
-  return target === 'adminAlumniList' ? 'admin alumni records' : 'alumni profiles';
+  return target === 'adminAlumniList' ? 'admin member records' : 'member profiles';
 }
 
 function setAlumniPage(target, pageNumber) {
@@ -249,12 +249,12 @@ function alumniParams() {
 
 async function loadAlumni(target = 'alumniList') {
   if (!isLoggedIn()) {
-    setHtml(target, '<p class="notice">Please login to search alumni.</p>');
+    setHtml(target, '<p class="notice">Please sign in to search the member directory.</p>');
     return;
   }
   const data = await request(`/alumni?${alumniParams().toString()}`);
   if (!data.success) {
-    setHtml(target, `<p class="error">${escapeHtml(data.message || 'Unable to load alumni.')}</p>`);
+    setHtml(target, `<p class="error">${escapeHtml(data.message || 'Unable to load members.')}</p>`);
     return;
   }
 
