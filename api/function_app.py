@@ -29,7 +29,8 @@ SESSION_HOURS = 8
 
 TABLE_USERS = "UserAccounts"
 TABLE_SESSIONS = "Sessions"
-TABLE_ALUMNI = "AlumniProfiles"
+TABLE_MEMBERS = "MemberProfiles"
+TABLE_ALUMNI_LEGACY = "AlumniProfiles"  # Stage 1 compatibility only
 TABLE_EVENTS = "Events"
 TABLE_KNOWLEDGE = "BlogPosts"
 BLOB_IMAGES = "images"
@@ -38,8 +39,14 @@ BLOB_SITE_IMAGES = "site-images"
 ROLE_ADMIN = "admin"
 ROLE_CONTRIBUTOR = "contributor"
 ROLE_READER = "reader"
-ROLE_ALUMNI = "alumni"  # backward-compatible existing seed role
-USER_ROLES = {ROLE_ADMIN, ROLE_CONTRIBUTOR, ROLE_ALUMNI}
+ROLE_MEMBER = "member"
+ROLE_ALUMNI_LEGACY = "alumni"  # Stage 1 compatibility only
+USER_ROLES = {
+    ROLE_ADMIN,
+    ROLE_CONTRIBUTOR,
+    ROLE_MEMBER,
+    ROLE_ALUMNI_LEGACY,
+}
 
 
 def utc_now() -> datetime:
@@ -185,10 +192,14 @@ def save_user(email: str, full_name: str, password: str, role: str = ROLE_READER
 
 def normalize_user_role(value: Any) -> str:
     role = clean(value).lower()
-    return role if role in USER_ROLES else ROLE_ALUMNI
+    if role == ROLE_ALUMNI_LEGACY:
+        return ROLE_MEMBER
+    if role in {ROLE_ADMIN, ROLE_CONTRIBUTOR, ROLE_MEMBER}:
+        return role
+    return ROLE_MEMBER
 
 
-def alumni_status_to_user_status(value: Any) -> str:
+def member_status_to_user_status(value: Any) -> str:
     status = clean(value).lower()
     if status in ("active", "approved", ""):
         return "approved"
@@ -229,7 +240,7 @@ def delete_sessions_for_email(
         except ResourceNotFoundError:
             pass
         
-def sync_alumni_user(
+def sync_member_user(
     alumni: Dict[str, Any],
     previous_email: str = "",
     previous_mobile: str = "",
@@ -303,7 +314,7 @@ def sync_alumni_user(
             alumni.get("role")
         ),
 
-        "status": alumni_status_to_user_status(
+        "status": member_status_to_user_status(
             alumni.get("status")
             or existing.get("status")
         ),
@@ -317,8 +328,8 @@ def sync_alumni_user(
 
         "password_reset_required": False,
 
-        "linked_alumni_id": clean(
-            alumni.get("alumni_id")
+        "linked_member_id": clean(
+            alumni.get("member_id")
             or existing.get("linked_alumni_id")
         ),
 
@@ -362,7 +373,7 @@ def sync_alumni_user(
 
 def create_session(user: Dict[str, Any], req: func.HttpRequest) -> Dict[str, Any]:
     session_id = secrets.token_urlsafe(32)
-    role = clean(user.get("role") or ROLE_ALUMNI).lower()
+    role = clean(user.get("role") or ROLE_MEMBER).lower()
     entity = {
         "PartitionKey": COMMUNITY_ID,
         "RowKey": session_id,
@@ -411,7 +422,7 @@ def current_user(req: func.HttpRequest) -> Optional[Dict[str, Any]]:
     except Exception:
         return None
     user = get_user(session.get("email", "")) or {}
-    role = clean(user.get("role") or session.get("role") or ROLE_ALUMNI).lower()
+    role = clean(user.get("role") or session.get("role") or ROLE_MEMBER).lower()
     return {
         "email": normalize_email(user.get("email") or session.get("email")),
         "user_id": clean(user.get("user_id") or session.get("user_id")),
@@ -419,31 +430,6 @@ def current_user(req: func.HttpRequest) -> Optional[Dict[str, Any]]:
         "role": role,
         "session_id": sid,
     }
-
-def delete_sessions_for_email(email: str) -> None:
-    email = normalize_email(email)
-
-    if not email:
-        return
-
-    sessions_table = table(TABLE_SESSIONS)
-
-    rows = sessions_table.query_entities(
-        query_filter="PartitionKey eq @partition and email eq @email",
-        parameters={
-            "partition": COMMUNITY_ID,
-            "email": email,
-        },
-    )
-
-    for session in rows:
-        try:
-            sessions_table.delete_entity(
-                partition_key=COMMUNITY_ID,
-                row_key=session["RowKey"],
-            )
-        except ResourceNotFoundError:
-            pass
 
 def require_login(req: func.HttpRequest) -> Dict[str, Any]:
     user = current_user(req)
@@ -476,7 +462,7 @@ def contains(field: Any, value: str) -> bool:
     return value in clean(field).lower()
 
 
-def public_alumni(profile: Dict[str, Any]) -> Dict[str, Any]:
+def public_member(profile: Dict[str, Any]) -> Dict[str, Any]:
     item = remove_storage_keys(profile)
     if not bool(item.get("show_email", True)):
         item["email"] = ""
@@ -568,13 +554,13 @@ def delete_item(table_name: str, item_id: str) -> None:
         raise ValueError("Item not found.")
 
 
-def upsert_alumni(
+def upsert_member(
     data: Dict[str, Any],
-    alumni_id: str = "",
+    member_id: str = "",
 ) -> Dict[str, Any]:
 
-    alumni_id = (
-        clean(alumni_id or data.get("alumni_id"))
+    member_id = (
+        clean(member_id or data.get("member_id") or data.get("alumni_id"))
         or str(uuid4())
     )
 
@@ -586,8 +572,8 @@ def upsert_alumni(
 
     try:
         existing = get_table_item(
-            TABLE_ALUMNI,
-            alumni_id,
+            TABLE_MEMBERS,
+            member_id,
         )
     except ValueError:
         pass
@@ -609,9 +595,10 @@ def upsert_alumni(
         **existing,
 
         "PartitionKey": COMMUNITY_ID,
-        "RowKey": alumni_id,
+        "RowKey": member_id,
 
-        "alumni_id": alumni_id,
+        "member_id": member_id,
+        "alumni_id": member_id,  # Stage 1 compatibility
 
         "full_name": clean(
             data.get(
@@ -723,7 +710,7 @@ def upsert_alumni(
                 "role",
                 existing.get(
                     "role",
-                    ROLE_ALUMNI,
+                    ROLE_MEMBER,
                 ),
             )
         ),
@@ -796,7 +783,7 @@ def upsert_alumni(
     # -------------------------------------------------
     # Save updated member profile
     # -------------------------------------------------
-    table(TABLE_ALUMNI).upsert_entity(entity)
+    table(TABLE_MEMBERS).upsert_entity(entity)
 
     # -------------------------------------------------
     # Synchronise login account.
@@ -805,25 +792,25 @@ def upsert_alumni(
     # previous_email and previous_mobile were captured
     # before the profile was updated.
     # -------------------------------------------------
-    sync_alumni_user(
+    sync_member_user(
         entity,
         previous_email=previous_email,
         previous_mobile=previous_mobile,
     )
 
-    return public_alumni(entity)
+    return public_member(entity)
 
-def delete_alumni_and_user(alumni_id: str) -> None:
-    alumni_id = clean(alumni_id)
+def delete_member_and_user(member_id: str) -> None:
+    member_id = clean(member_id)
 
-    if not alumni_id:
+    if not member_id:
         raise ValueError("Member id is required.")
 
     try:
         profile = dict(
-            table(TABLE_ALUMNI).get_entity(
+            table(TABLE_MEMBERS).get_entity(
                 partition_key=COMMUNITY_ID,
-                row_key=alumni_id,
+                row_key=member_id,
             )
         )
     except ResourceNotFoundError:
@@ -834,9 +821,9 @@ def delete_alumni_and_user(alumni_id: str) -> None:
     )
 
     # Delete profile
-    table(TABLE_ALUMNI).delete_entity(
+    table(TABLE_MEMBERS).delete_entity(
         partition_key=COMMUNITY_ID,
-        row_key=alumni_id,
+        row_key=member_id,
     )
 
     # Delete login
@@ -968,14 +955,14 @@ def knowledge_item(req: func.HttpRequest) -> func.HttpResponse:
         return fail(str(e), 400)
 
 
-@app.route(route="alumni", methods=["GET", "POST"])
-def alumni(req: func.HttpRequest) -> func.HttpResponse:
+@app.route(route="members", methods=["GET", "POST"])
+def members(req: func.HttpRequest) -> func.HttpResponse:
     try:
         if req.method == "GET":
             require_login(req)
             p = req.params
             rows = []
-            for profile in list_table_rows(TABLE_ALUMNI):
+            for profile in list_table_rows(TABLE_MEMBERS):
                 status = clean(profile.get("status") or "active")
                 visibility = clean(profile.get("visibility") or "visible")
                 if status not in ("", "active") or visibility not in ("", "visible"):
@@ -996,34 +983,34 @@ def alumni(req: func.HttpRequest) -> func.HttpResponse:
                     continue
                 if not contains(profile.get("skills"), p.get("skills", "")):
                     continue
-                rows.append(public_alumni(profile))
+                rows.append(public_member(profile))
             rows.sort(key=lambda x: clean(x.get("full_name")).lower())
-            return ok(rows, "Alumni loaded.")
+            return ok(rows, "Members loaded.")
 
         require_role(req, [ROLE_ADMIN])
-        return ok(upsert_alumni(body(req)), "Alumni profile saved.", 201)
+        return ok(upsert_member(body(req)), "Member profile saved.", 201)
     except PermissionError as e:
         return fail(str(e), 401 if str(e) == "Login required" else 403)
     except Exception as e:
         return fail(str(e), 400)
 
 
-@app.route(route="alumni/{alumni_id}", methods=["PUT", "DELETE"])
-def alumni_item(req: func.HttpRequest) -> func.HttpResponse:
+@app.route(route="members/{member_id}", methods=["PUT", "DELETE"])
+def member_item(req: func.HttpRequest) -> func.HttpResponse:
     try:
         require_role(req, [ROLE_ADMIN])
 
-        alumni_id = req.route_params.get("alumni_id", "")
+        member_id = req.route_params.get("member_id", "")
 
         if req.method == "DELETE":
-            delete_alumni_and_user(alumni_id)
+            delete_member_and_user(member_id)
             return ok(
                 {},
                 "Member profile and linked account deleted."
             )
 
         return ok(
-            upsert_alumni(body(req), alumni_id),
+            upsert_member(body(req), member_id),
             "Member profile updated."
         )
 
@@ -1086,7 +1073,7 @@ def admin_summary_response(req: func.HttpRequest) -> func.HttpResponse:
         require_role(req, [ROLE_ADMIN])
         return ok(
             {
-                "alumni": len(list_table_rows(TABLE_ALUMNI)),
+                "members": len(list_table_rows(TABLE_MEMBERS)),
                 "events": len(list_table_rows(TABLE_EVENTS)),
                 "knowledge": len(list_table_rows(TABLE_KNOWLEDGE)),
             },
@@ -1102,6 +1089,23 @@ def admin_summary_response(req: func.HttpRequest) -> func.HttpResponse:
 def dashboard_summary(req: func.HttpRequest) -> func.HttpResponse:
     return admin_summary_response(req)
 
+
+
+# =========================================================
+# Stage 1 legacy API compatibility.
+# Remove after /api/members passes browser UAT.
+# =========================================================
+
+@app.route(route="alumni", methods=["GET", "POST"])
+def legacy_alumni(req: func.HttpRequest) -> func.HttpResponse:
+    return members(req)
+
+
+@app.route(route="alumni/{alumni_id}", methods=["PUT", "DELETE"])
+def legacy_alumni_item(req: func.HttpRequest) -> func.HttpResponse:
+    legacy_id = clean(req.route_params.get("alumni_id", ""))
+    req.route_params["member_id"] = legacy_id
+    return member_item(req)
 
 @app.route(route="users", methods=["GET", "POST"])
 def users(req: func.HttpRequest) -> func.HttpResponse:

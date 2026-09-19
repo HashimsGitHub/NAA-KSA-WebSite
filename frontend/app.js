@@ -75,7 +75,7 @@ function setText(id, text) {
 }
 
 function contentId(item) {
-  return item.id || item.event_id || item.post_id || item.alumni_id || '';
+  return item.id || item.event_id || item.post_id || (item.member_id || item.alumni_id) || '';
 }
 
 function renderAuthState() {
@@ -151,7 +151,7 @@ function renderAlumni(items, admin = false) {
         ${a.skills ? `<p>${escapeHtml(a.skills)}</p>` : ''}
         ${a.linkedin_url ? `<p><a href="${escapeHtml(a.linkedin_url)}" target="_blank" rel="noopener">LinkedIn</a></p>` : ''}
       </div>
-      ${admin ? renderAdminActions('alumni', a.alumni_id, disableActions) : ''}
+      ${admin ? renderAdminActions('alumni', (a.member_id || a.alumni_id), disableActions) : ''}
     </article>
   `).join('');
 }
@@ -252,7 +252,7 @@ async function loadAlumni(target = 'alumniList') {
     setHtml(target, '<p class="notice">Please sign in to search the member directory.</p>');
     return;
   }
-  const data = await request(`/alumni?${alumniParams().toString()}`);
+  const data = await request(`/members?${alumniParams().toString()}`);
   if (!data.success) {
     setHtml(target, `<p class="error">${escapeHtml(data.message || 'Unable to load members.')}</p>`);
     return;
@@ -362,14 +362,14 @@ function alumniPayload() {
     linkedin_url: el('aLinkedin').value,
     bio: el('aBio').value,
     status: el('aStatus').value || 'active',
-    role: el('aRole').value || 'alumni',
+    role: el('aRole').value || 'member',
     visibility: 'visible',
   };
 }
 
 async function saveAlumni() {
   const id = el('aId').value;
-  const data = await request(id ? `/alumni/${id}` : '/alumni', {
+  const data = await request(id ? `/members/${id}` : '/members', {
     method: id ? 'PUT' : 'POST',
     body: JSON.stringify(alumniPayload())
   });
@@ -382,7 +382,8 @@ async function saveAlumni() {
 
 async function deleteAdminItem(type, id) {
   if (!id) return;
-  const data = await request(`/${type}/${id}`, { method: 'DELETE' });
+  const routeType = type === 'alumni' ? 'members' : type;
+  const data = await request(`/${routeType}/${id}`, { method: 'DELETE' });
   setText('adminStatus', data.message || '');
   if (data.success) await refreshAdmin();
 }
@@ -422,7 +423,7 @@ function editAlumni(id) {
   el('aLinkedin').value = item.linkedin_url || '';
   el('aBio').value = item.bio || '';
   el('aStatus').value = item.status || 'active';
-  el('aRole').value = item.role || 'alumni';
+  el('aRole').value = item.role || 'member';
   setText('alumniAdminStatus', `Editing ${item.full_name || id}`);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }

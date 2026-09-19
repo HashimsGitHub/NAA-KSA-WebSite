@@ -166,7 +166,7 @@ def test_members(session_id, token):
         # CREATE
         # -------------------------------------------------
         member = {
-            "alumni_id": member_id,
+            "member_id": member_id,
             "full_name": f"CRUD Test Member {token}",
             "email": original_email,
             "mobile": original_mobile,
@@ -182,7 +182,7 @@ def test_members(session_id, token):
             "bio": "Temporary member created by the automated CRUD suite.",
             "skills": "testing,community",
             "profile_image_url": "",
-            "role": "alumni",
+            "role": "member",
             "status": "active",
             "visibility": "visible",
             "show_email": True,
@@ -191,7 +191,7 @@ def test_members(session_id, token):
 
         status, payload = api(
             "POST",
-            "/alumni",
+            "/members",
             member,
             session_id,
         )
@@ -210,7 +210,7 @@ def test_members(session_id, token):
         # -------------------------------------------------
         status, payload = api(
             "GET",
-            "/alumni",
+            "/members",
             session_id=session_id,
         )
 
@@ -222,7 +222,7 @@ def test_members(session_id, token):
         )
 
         check(
-            find_id(items, "alumni_id", member_id) is not None,
+            find_id(items, "member_id", member_id) is not None,
             "Members READ created record",
         )
 
@@ -258,7 +258,7 @@ def test_members(session_id, token):
 
         status, payload = api(
             "PUT",
-            f"/alumni/{member_id}",
+            f"/members/{member_id}",
             update,
             session_id,
         )
@@ -286,7 +286,7 @@ def test_members(session_id, token):
         # -------------------------------------------------
         status, payload = api(
             "GET",
-            "/alumni",
+            "/members",
             session_id=session_id,
         )
 
@@ -327,7 +327,7 @@ def test_members(session_id, token):
 
         status, payload = api(
             "PUT",
-            f"/alumni/{member_id}",
+            f"/members/{member_id}",
             credential_update,
             session_id,
         )
@@ -357,7 +357,7 @@ def test_members(session_id, token):
         # -------------------------------------------------
         status, payload = api(
             "GET",
-            "/alumni",
+            "/members",
             session_id=session_id,
         )
 
@@ -427,7 +427,7 @@ def test_members(session_id, token):
             )
 
             check(
-                new_account.get("role") == "alumni",
+                new_account.get("role") == "member",
                 "Member role preserved after email change",
             )
 
@@ -497,7 +497,7 @@ def test_members(session_id, token):
         # -------------------------------------------------
         status, payload = api(
             "DELETE",
-            f"/alumni/{member_id}",
+            f"/members/{member_id}",
             session_id=session_id,
         )
 
@@ -515,7 +515,7 @@ def test_members(session_id, token):
         # -------------------------------------------------
         status, payload = api(
             "GET",
-            "/alumni",
+            "/members",
             session_id=session_id,
         )
 
@@ -600,7 +600,7 @@ def test_members(session_id, token):
         if created:
             api(
                 "DELETE",
-                f"/alumni/{member_id}",
+                f"/members/{member_id}",
                 session_id=session_id,
             )
 
@@ -610,7 +610,7 @@ def test_dashboard(session_id):
     status, payload = api("GET", "/dashboard/summary", session_id=session_id)
     data = payload_data(status, payload, 200, "Dashboard summary")
     if data:
-        check(all(k in data for k in ("alumni", "events", "knowledge")), "Dashboard summary fields")
+        check(all(k in data for k in ("members", "events", "knowledge")), "Dashboard summary fields")
 
 
 def main():
