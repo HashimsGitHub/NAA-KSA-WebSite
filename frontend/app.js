@@ -498,9 +498,44 @@ function wireEvents() {
   });
 }
 
+function wireMobileNavigation() {
+  document.querySelectorAll('.topnav').forEach((nav) => {
+    const toggle = nav.querySelector('.nav-toggle');
+    const menu = nav.querySelector('.nav-links');
+
+    if (!toggle || !menu) return;
+
+    const setOpen = (open) => {
+      nav.classList.toggle('nav-open', open);
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      toggle.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+    };
+
+    toggle.addEventListener('click', () => {
+      setOpen(!nav.classList.contains('nav-open'));
+    });
+
+    menu.addEventListener('click', (event) => {
+      if (event.target.closest('a')) setOpen(false);
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        toggle.focus();
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 980) setOpen(false);
+    });
+  });
+}
+
 async function init() {
   renderAuthState();
   wireEvents();
+  wireMobileNavigation();
   if (page === 'home' || page === 'events') await loadEvents();
   if (page === 'knowledge') await loadKnowledge();
   if (page === 'alumni') await loadMembers();

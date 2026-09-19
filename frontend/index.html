@@ -21,7 +21,19 @@
           >
       </a>
 
-      <div class="nav-links">
+      <button
+        class="nav-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="primary-navigation"
+        aria-label="Open navigation"
+      >
+        <span class="nav-toggle-line" aria-hidden="true"></span>
+        <span class="nav-toggle-line" aria-hidden="true"></span>
+        <span class="nav-toggle-line" aria-hidden="true"></span>
+      </button>
+
+      <div id="primary-navigation" class="nav-links">
         <a class="active" href="/">Home</a>
         <a href="/pages/events.html">Events</a>
         <a data-requires="user" href="/pages/members.html">Member Directory</a>

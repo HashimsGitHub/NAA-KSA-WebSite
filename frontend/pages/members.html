@@ -15,7 +15,19 @@
     <a class="brand" href="/" aria-label="VCNITY home">
       <img src="/assets/vcnity/VCNITY_logo.png" alt="VCNITY" class="brand-logo" />
     </a>
-    <div class="nav-links">
+        <button
+      class="nav-toggle"
+      type="button"
+      aria-expanded="false"
+      aria-controls="primary-navigation"
+      aria-label="Open navigation"
+    >
+      <span class="nav-toggle-line" aria-hidden="true"></span>
+      <span class="nav-toggle-line" aria-hidden="true"></span>
+      <span class="nav-toggle-line" aria-hidden="true"></span>
+    </button>
+
+<div id="primary-navigation" class="nav-links">
       <a href="/">Home</a>
       <a href="/pages/events.html">Events</a>
       <a class="active" data-requires="user" href="/pages/members.html">Member Directory</a>
