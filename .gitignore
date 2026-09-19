@@ -9,3 +9,12 @@ api/local.settings.json
 local.settings.json
 .cht*:Zone.Identifier
 .cht
+
+# Local migration/refactor backups
+*.stage1-backup
+
+# Local one-off refactor helper
+scripts/apply_member_refactor_stage1.py
+
+# Windows metadata
+*:Zone.Identifier
