@@ -5,7 +5,7 @@
       "allowedRoles": ["administrator"]
     },
     {
-      "route": "/alumni/*",
+      "route": "/members/*",
       "allowedRoles": ["authenticated"]
     },
     {

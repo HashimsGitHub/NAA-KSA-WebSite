@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Explore public community events published through VCNITY." />
+  <meta name="description" content="VCNITY Knowledge Hub for shared community resources, guides and practical information." />
   <meta name="theme-color" content="#444157" />
-  <title>Community Events | VCNITY</title>
+  <title>Knowledge Hub | VCNITY</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
-<body data-page="events">
+<body data-page="knowledge">
   <a class="skip-link" href="#main-content">Skip to main content</a>
 
   <nav class="topnav" aria-label="Primary navigation">
@@ -17,9 +17,9 @@
     </a>
     <div class="nav-links">
       <a href="/">Home</a>
-      <a class="active" href="/pages/events.html">Events</a>
-      <a data-requires="user" href="/pages/members.html">Member Directory</a>
-      <a data-requires="user" href="/pages/blogs.html">Knowledge Hub</a>
+      <a href="/pages/events.html">Events</a>
+      <a data-requires="user" href="/pages/alumni.html">Member Directory</a>
+      <a class="active" data-requires="user" href="/pages/blogs.html">Knowledge Hub</a>
       <a href="/pages/about.html">About</a>
       <a href="/pages/charter.html">Charter</a>
       <a data-requires="contributor" href="/pages/admin.html">Admin</a>
@@ -29,20 +29,21 @@
   </nav>
 
   <main id="main-content" class="page-shell">
-    <section class="page-intro page-intro-events">
-      <p class="eyebrow">Open to the community</p>
-      <h1>Community events</h1>
-      <p>Discover gatherings, workshops, activities and opportunities to participate across the VCNITY community.</p>
+    <section class="page-intro page-intro-knowledge">
+      <p class="eyebrow">Members only</p>
+      <h1>Knowledge Hub</h1>
+      <p>Shared guides, practical resources and community knowledge—kept together so useful information is easier to find and reuse.</p>
     </section>
 
-    <section aria-labelledby="events-list-heading">
+    <section aria-labelledby="knowledge-list-heading">
       <div class="section-heading section-heading-row">
         <div>
-          <p class="eyebrow">What’s happening</p>
-          <h2 id="events-list-heading">Upcoming and published events</h2>
+          <p class="eyebrow">Shared knowledge</p>
+          <h2 id="knowledge-list-heading">Community resources</h2>
         </div>
+        <a data-requires="contributor" class="text-link" href="/pages/admin.html">Manage resources <span aria-hidden="true">→</span></a>
       </div>
-      <div id="eventList" class="cards event-grid" aria-live="polite"></div>
+      <div id="knowledgeList" class="cards" aria-live="polite"></div>
     </section>
   </main>
 
@@ -58,7 +59,6 @@
         <a href="/pages/events.html">Events</a>
         <a href="/pages/about.html">About</a>
         <a href="/pages/charter.html">Community Charter</a>
-        <a data-requires="guest" href="/pages/login.html">Login</a>
       </div>
     </div>
   </footer>

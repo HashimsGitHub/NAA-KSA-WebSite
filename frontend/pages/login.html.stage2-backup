@@ -18,7 +18,7 @@
     <div class="nav-links">
       <a href="/">Home</a>
       <a href="/pages/events.html">Events</a>
-      <a data-requires="user" href="/pages/members.html">Member Directory</a>
+      <a data-requires="user" href="/pages/alumni.html">Member Directory</a>
       <a data-requires="user" href="/pages/blogs.html">Knowledge Hub</a>
       <a href="/pages/about.html">About</a>
       <a href="/pages/charter.html">Charter</a>
@@ -48,7 +48,7 @@
         <p class="eyebrow">You are signed in</p>
         <p data-user-summary></p>
         <div class="inline-actions">
-          <a class="button button-primary" href="/pages/members.html">Open member directory</a>
+          <a class="button button-primary" href="/pages/alumni.html">Open member directory</a>
           <a class="button button-ghost" data-requires="contributor" href="/pages/admin.html">Open admin</a>
         </div>
       </div>

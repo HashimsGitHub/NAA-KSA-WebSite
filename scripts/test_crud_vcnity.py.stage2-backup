@@ -299,7 +299,7 @@ def test_members(session_id, token):
 
         found = find_id(
             items,
-            "member_id",
+            "alumni_id",
             member_id,
         )
 
@@ -370,7 +370,7 @@ def test_members(session_id, token):
 
         found = find_id(
             items,
-            "member_id",
+            "alumni_id",
             member_id,
         )
 
@@ -529,7 +529,7 @@ def test_members(session_id, token):
         check(
             find_id(
                 items,
-                "member_id",
+                "alumni_id",
                 member_id,
             )
             is None,

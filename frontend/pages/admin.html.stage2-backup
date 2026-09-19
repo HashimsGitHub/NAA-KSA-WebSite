@@ -18,7 +18,7 @@
     <div class="nav-links">
       <a href="/">Home</a>
       <a href="/pages/events.html">Events</a>
-      <a data-requires="user" href="/pages/members.html">Member Directory</a>
+      <a data-requires="user" href="/pages/alumni.html">Member Directory</a>
       <a data-requires="user" href="/pages/blogs.html">Knowledge Hub</a>
       <a href="/pages/about.html">About</a>
       <a href="/pages/charter.html">Charter</a>
@@ -38,7 +38,7 @@
       </section>
 
       <section class="metrics" aria-label="VCNITY content summary">
-        <div><span id="countMembers">0</span><p>Community Members</p></div>
+        <div><span id="countAlumni">0</span><p>Community Members</p></div>
         <div><span id="countEvents">0</span><p>Events</p></div>
         <div><span id="countKnowledge">0</span><p>Knowledge Resources</p></div>
       </section>
@@ -76,7 +76,7 @@
         <div class="tool-panel admin-disabled-surface" data-admin-only-controls>
           <p class="eyebrow">Administrator only</p>
           <h2>Community Member</h2>
-          <p class="muted">Create and maintain VCNITY community member profiles and access roles.</p>
+          <p class="muted">The current backend still uses the original profile fields internally; these labels present them in VCNITY terminology.</p>
           <input id="aId" type="hidden" />
           <div class="grid">
             <input id="aFullName" placeholder="Full name" />
@@ -97,15 +97,15 @@
               <option value="suspended">Suspended</option>
             </select>
             <select id="aRole" aria-label="Member role">
-              <option value="member">Member</option>
+              <option value="alumni">Member</option>
               <option value="contributor">Contributor</option>
               <option value="admin">Administrator</option>
             </select>
             <textarea id="aBio" placeholder="About this member"></textarea>
-            <button id="saveMemberButton" type="button">Save member</button>
-            <button id="resetMemberButton" class="secondary" type="button">Clear form</button>
+            <button id="saveAlumniButton" type="button">Save member</button>
+            <button id="resetAlumniButton" class="secondary" type="button">Clear form</button>
           </div>
-          <p id="memberAdminStatus" class="notice" aria-live="polite"></p>
+          <p id="alumniAdminStatus" class="notice" aria-live="polite"></p>
         </div>
       </section>
 
@@ -133,7 +133,7 @@
             <p class="eyebrow">Administrator only</p>
             <h2>Member Directory</h2>
           </div>
-          <div id="adminMemberList" class="cards compact"></div>
+          <div id="adminAlumniList" class="cards compact"></div>
         </div>
       </section>
     </div>

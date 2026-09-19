@@ -1,4 +1,4 @@
-"""VCNITY Safer Digital Community Hub backend.
+"""KISS backend for NUST KSA Alumni Portal.
 
 One Azure Static Web Apps managed API file.
 Storage: Azure Tables + Azure Blob Storage.
@@ -30,6 +30,7 @@ SESSION_HOURS = 8
 TABLE_USERS = "UserAccounts"
 TABLE_SESSIONS = "Sessions"
 TABLE_MEMBERS = "MemberProfiles"
+TABLE_ALUMNI_LEGACY = "AlumniProfiles"  # Stage 1 compatibility only
 TABLE_EVENTS = "Events"
 TABLE_KNOWLEDGE = "BlogPosts"
 BLOB_IMAGES = "images"
@@ -39,10 +40,12 @@ ROLE_ADMIN = "admin"
 ROLE_CONTRIBUTOR = "contributor"
 ROLE_READER = "reader"
 ROLE_MEMBER = "member"
+ROLE_ALUMNI_LEGACY = "alumni"  # Stage 1 compatibility only
 USER_ROLES = {
     ROLE_ADMIN,
     ROLE_CONTRIBUTOR,
     ROLE_MEMBER,
+    ROLE_ALUMNI_LEGACY,
 }
 
 
@@ -189,6 +192,8 @@ def save_user(email: str, full_name: str, password: str, role: str = ROLE_READER
 
 def normalize_user_role(value: Any) -> str:
     role = clean(value).lower()
+    if role == ROLE_ALUMNI_LEGACY:
+        return ROLE_MEMBER
     if role in {ROLE_ADMIN, ROLE_CONTRIBUTOR, ROLE_MEMBER}:
         return role
     return ROLE_MEMBER
@@ -236,13 +241,13 @@ def delete_sessions_for_email(
             pass
         
 def sync_member_user(
-    member: Dict[str, Any],
+    alumni: Dict[str, Any],
     previous_email: str = "",
     previous_mobile: str = "",
 ) -> Optional[Dict[str, Any]]:
 
-    email = normalize_email(member.get("email", ""))
-    mobile = clean(member.get("mobile"))
+    email = normalize_email(alumni.get("email", ""))
+    mobile = clean(alumni.get("mobile"))
 
     previous_email = normalize_email(previous_email)
     previous_mobile = clean(previous_mobile)
@@ -298,7 +303,7 @@ def sync_member_user(
         "email": email,
 
         "full_name": (
-            clean(member.get("full_name"))
+            clean(alumni.get("full_name"))
             or clean(existing.get("full_name"))
             or email
         ),
@@ -306,11 +311,11 @@ def sync_member_user(
         "mobile": mobile,
 
         "role": normalize_user_role(
-            member.get("role")
+            alumni.get("role")
         ),
 
         "status": member_status_to_user_status(
-            member.get("status")
+            alumni.get("status")
             or existing.get("status")
         ),
 
@@ -324,8 +329,8 @@ def sync_member_user(
         "password_reset_required": False,
 
         "linked_member_id": clean(
-            member.get("member_id")
-            or existing.get("linked_member_id")
+            alumni.get("member_id")
+            or existing.get("linked_alumni_id")
         ),
 
         "created_at": (
@@ -555,7 +560,7 @@ def upsert_member(
 ) -> Dict[str, Any]:
 
     member_id = (
-        clean(member_id or data.get("member_id"))
+        clean(member_id or data.get("member_id") or data.get("alumni_id"))
         or str(uuid4())
     )
 
@@ -593,6 +598,7 @@ def upsert_member(
         "RowKey": member_id,
 
         "member_id": member_id,
+        "alumni_id": member_id,  # Stage 1 compatibility
 
         "full_name": clean(
             data.get(
@@ -846,7 +852,8 @@ def health(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="register", methods=["POST"])
 def register(req: func.HttpRequest) -> func.HttpResponse:
-    return fail("Registration is disabled. Member accounts are managed by VCNITY administrators.", 410)
+    return fail("Registration is disabled. Alumni accounts are managed through the member database import.", 410)
+
 
 
 @app.route(route="auth/login", methods=["POST"])
@@ -1082,6 +1089,23 @@ def admin_summary_response(req: func.HttpRequest) -> func.HttpResponse:
 def dashboard_summary(req: func.HttpRequest) -> func.HttpResponse:
     return admin_summary_response(req)
 
+
+
+# =========================================================
+# Stage 1 legacy API compatibility.
+# Remove after /api/members passes browser UAT.
+# =========================================================
+
+@app.route(route="alumni", methods=["GET", "POST"])
+def legacy_alumni(req: func.HttpRequest) -> func.HttpResponse:
+    return members(req)
+
+
+@app.route(route="alumni/{alumni_id}", methods=["PUT", "DELETE"])
+def legacy_alumni_item(req: func.HttpRequest) -> func.HttpResponse:
+    legacy_id = clean(req.route_params.get("alumni_id", ""))
+    req.route_params["member_id"] = legacy_id
+    return member_item(req)
 
 @app.route(route="users", methods=["GET", "POST"])
 def users(req: func.HttpRequest) -> func.HttpResponse:

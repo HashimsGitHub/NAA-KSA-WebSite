@@ -5,10 +5,10 @@ const page = document.body.dataset.page || 'home';
 
 let sessionId = localStorage.getItem('naa_session_id') || '';
 let currentUser = JSON.parse(localStorage.getItem('naa_user') || 'null');
-let adminState = { events: [], knowledge: [], members: [] };
-const memberPaging = {
-  memberList: { page: 1, pageSize: 24, items: [] },
-  adminMemberList: { page: 1, pageSize: 12, items: [] },
+let adminState = { events: [], knowledge: [], alumni: [] };
+const alumniPaging = {
+  alumniList: { page: 1, pageSize: 24, items: [] },
+  adminAlumniList: { page: 1, pageSize: 12, items: [] },
 };
 
 function isLoggedIn() {
@@ -75,7 +75,7 @@ function setText(id, text) {
 }
 
 function contentId(item) {
-  return item.id || item.event_id || item.post_id || item.member_id || '';
+  return item.id || item.event_id || item.post_id || (item.member_id || item.alumni_id) || '';
 }
 
 function renderAuthState() {
@@ -135,12 +135,12 @@ function renderKnowledge(items, admin = false) {
   `).join('');
 }
 
-function renderMembers(items, admin = false) {
+function renderAlumni(items, admin = false) {
   const rows = Array.isArray(items) ? items : [];
   if (!rows.length) return '<p class="notice">No members matched the current filters.</p>';
   const disableActions = page === 'admin' && !isAdmin();
   return rows.map((a) => `
-    <article class="item member-item">
+    <article class="item alumni-item">
       ${a.profile_image_url ? `<img src="${escapeHtml(a.profile_image_url)}" alt="${escapeHtml(a.full_name)}">` : ''}
       <div class="item-body">
         <span class="badge">${escapeHtml(a.graduation_year || 'Member')}</span>
@@ -151,53 +151,53 @@ function renderMembers(items, admin = false) {
         ${a.skills ? `<p>${escapeHtml(a.skills)}</p>` : ''}
         ${a.linkedin_url ? `<p><a href="${escapeHtml(a.linkedin_url)}" target="_blank" rel="noopener">LinkedIn</a></p>` : ''}
       </div>
-      ${admin ? renderAdminActions('alumni', a.member_id, disableActions) : ''}
+      ${admin ? renderAdminActions('alumni', (a.member_id || a.alumni_id), disableActions) : ''}
     </article>
   `).join('');
 }
 
-function memberPageSize(target) {
-  return target === 'adminMemberList' ? 12 : 24;
+function alumniPageSize(target) {
+  return target === 'adminAlumniList' ? 12 : 24;
 }
 
-function memberTargetLabel(target) {
-  return target === 'adminMemberList' ? 'admin member records' : 'member profiles';
+function alumniTargetLabel(target) {
+  return target === 'adminAlumniList' ? 'admin member records' : 'member profiles';
 }
 
-function setMemberPage(target, pageNumber) {
-  const state = memberPaging[target];
+function setAlumniPage(target, pageNumber) {
+  const state = alumniPaging[target];
   if (!state) return;
   const pageCount = Math.max(1, Math.ceil(state.items.length / state.pageSize));
   state.page = Math.min(Math.max(1, pageNumber), pageCount);
-  renderMembersPage(target);
+  renderAlumniPage(target);
 }
 
-function renderMembersPager(target, page, pageCount, total, from, to) {
-  const label = memberTargetLabel(target);
+function renderAlumniPager(target, page, pageCount, total, from, to) {
+  const label = alumniTargetLabel(target);
   if (!total) return '';
   return `
     <div class="pagination" aria-label="${escapeHtml(label)} pagination">
       <p class="pagination-summary">Showing ${from}-${to} of ${total} ${escapeHtml(label)}</p>
       <div class="pagination-actions">
-        <button type="button" class="secondary" data-member-page-target="${escapeHtml(target)}" data-member-page="first" ${page <= 1 ? 'disabled' : ''}>First</button>
-        <button type="button" class="secondary" data-member-page-target="${escapeHtml(target)}" data-member-page="prev" ${page <= 1 ? 'disabled' : ''}>Previous</button>
+        <button type="button" class="secondary" data-alumni-page-target="${escapeHtml(target)}" data-alumni-page="first" ${page <= 1 ? 'disabled' : ''}>First</button>
+        <button type="button" class="secondary" data-alumni-page-target="${escapeHtml(target)}" data-alumni-page="prev" ${page <= 1 ? 'disabled' : ''}>Previous</button>
         <span class="page-indicator">Page ${page} of ${pageCount}</span>
-        <button type="button" class="secondary" data-member-page-target="${escapeHtml(target)}" data-member-page="next" ${page >= pageCount ? 'disabled' : ''}>Next</button>
-        <button type="button" class="secondary" data-member-page-target="${escapeHtml(target)}" data-member-page="last" ${page >= pageCount ? 'disabled' : ''}>Last</button>
+        <button type="button" class="secondary" data-alumni-page-target="${escapeHtml(target)}" data-alumni-page="next" ${page >= pageCount ? 'disabled' : ''}>Next</button>
+        <button type="button" class="secondary" data-alumni-page-target="${escapeHtml(target)}" data-alumni-page="last" ${page >= pageCount ? 'disabled' : ''}>Last</button>
       </div>
     </div>
   `;
 }
 
-function renderMembersPage(target) {
-  const state = memberPaging[target];
+function renderAlumniPage(target) {
+  const state = alumniPaging[target];
   if (!state) return;
   const total = state.items.length;
   const pageCount = Math.max(1, Math.ceil(total / state.pageSize));
   state.page = Math.min(Math.max(1, state.page), pageCount);
 
   if (!total) {
-    setHtml(target, renderMembers([], page === 'admin'));
+    setHtml(target, renderAlumni([], page === 'admin'));
     return;
   }
 
@@ -205,7 +205,7 @@ function renderMembersPage(target) {
   const pageItems = state.items.slice(start, start + state.pageSize);
   const from = start + 1;
   const to = start + pageItems.length;
-  setHtml(target, `${renderMembersPager(target, state.page, pageCount, total, from, to)}${renderMembers(pageItems, page === 'admin')}${renderMembersPager(target, state.page, pageCount, total, from, to)}`);
+  setHtml(target, `${renderAlumniPager(target, state.page, pageCount, total, from, to)}${renderAlumni(pageItems, page === 'admin')}${renderAlumniPager(target, state.page, pageCount, total, from, to)}`);
 }
 
 function renderAdminActions(type, id, disabled = false) {
@@ -234,7 +234,7 @@ async function loadKnowledge(target = 'knowledgeList') {
   if (data.success && page === 'admin') adminState.knowledge = data.data;
 }
 
-function memberParams() {
+function alumniParams() {
   return new URLSearchParams({
     name: el('qName')?.value || '',
     graduation_year: el('qGraduationYear')?.value || '',
@@ -247,23 +247,23 @@ function memberParams() {
   });
 }
 
-async function loadMembers(target = 'memberList') {
+async function loadAlumni(target = 'alumniList') {
   if (!isLoggedIn()) {
     setHtml(target, '<p class="notice">Please sign in to search the member directory.</p>');
     return;
   }
-  const data = await request(`/members?${memberParams().toString()}`);
+  const data = await request(`/members?${alumniParams().toString()}`);
   if (!data.success) {
     setHtml(target, `<p class="error">${escapeHtml(data.message || 'Unable to load members.')}</p>`);
     return;
   }
 
-  if (!memberPaging[target]) memberPaging[target] = { page: 1, pageSize: memberPageSize(target), items: [] };
-  memberPaging[target].items = Array.isArray(data.data) ? data.data : [];
-  memberPaging[target].pageSize = memberPageSize(target);
-  memberPaging[target].page = 1;
-  renderMembersPage(target);
-  if (page === 'admin') adminState.members = memberPaging[target].items;
+  if (!alumniPaging[target]) alumniPaging[target] = { page: 1, pageSize: alumniPageSize(target), items: [] };
+  alumniPaging[target].items = Array.isArray(data.data) ? data.data : [];
+  alumniPaging[target].pageSize = alumniPageSize(target);
+  alumniPaging[target].page = 1;
+  renderAlumniPage(target);
+  if (page === 'admin') adminState.alumni = alumniPaging[target].items;
 }
 
 async function login() {
@@ -346,7 +346,7 @@ async function saveContent() {
   }
 }
 
-function memberPayload() {
+function alumniPayload() {
   return {
     full_name: el('aFullName').value,
     email: el('aEmail').value,
@@ -367,22 +367,22 @@ function memberPayload() {
   };
 }
 
-async function saveMember() {
+async function saveAlumni() {
   const id = el('aId').value;
   const data = await request(id ? `/members/${id}` : '/members', {
     method: id ? 'PUT' : 'POST',
-    body: JSON.stringify(memberPayload())
+    body: JSON.stringify(alumniPayload())
   });
-  setText('memberAdminStatus', data.message || '');
+  setText('alumniAdminStatus', data.message || '');
   if (data.success) {
-    resetMemberForm();
+    resetAlumniForm();
     await refreshAdmin();
   }
 }
 
 async function deleteAdminItem(type, id) {
   if (!id) return;
-  const routeType = type === 'members' ? 'members' : type;
+  const routeType = type === 'alumni' ? 'members' : type;
   const data = await request(`/${routeType}/${id}`, { method: 'DELETE' });
   setText('adminStatus', data.message || '');
   if (data.success) await refreshAdmin();
@@ -405,8 +405,8 @@ function editContent(type, id) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function editMember(id) {
-  const item = adminState.members.find((x) => x.member_id === id);
+function editAlumni(id) {
+  const item = adminState.alumni.find((x) => x.alumni_id === id);
   if (!item) return;
   el('aId').value = id;
   el('aFullName').value = item.full_name || '';
@@ -424,7 +424,7 @@ function editMember(id) {
   el('aBio').value = item.bio || '';
   el('aStatus').value = item.status || 'active';
   el('aRole').value = item.role || 'member';
-  setText('memberAdminStatus', `Editing ${item.full_name || id}`);
+  setText('alumniAdminStatus', `Editing ${item.full_name || id}`);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -434,14 +434,14 @@ function resetContentForm() {
   if (el('contentStatus')) el('contentStatus').value = 'published';
 }
 
-function resetMemberForm() {
+function resetAlumniForm() {
   ['aId', 'aFullName', 'aEmail', 'aMobile', 'aGraduationYear', 'aDegree', 'aDepartment', 'aCompany', 'aPosition', 'aCity', 'aCountry', 'aSkills', 'aLinkedin', 'aBio'].forEach((id) => { if (el(id)) el(id).value = ''; });
   if (el('aStatus')) el('aStatus').value = 'active';
   if (el('aRole')) el('aRole').value = 'alumni';
 }
 
 function updateAdminCounts() {
-  setText('countMembers', adminState.members.length);
+  setText('countAlumni', adminState.alumni.length);
   setText('countEvents', adminState.events.length);
   setText('countKnowledge', adminState.knowledge.length);
 }
@@ -451,7 +451,7 @@ async function refreshAdmin() {
     setHtml('adminWorkspace', '<p class="notice">Contributor or admin access is required for this page.</p>');
     return;
   }
-  const tasks = [loadEvents('adminEventList'), loadKnowledge('adminKnowledgeList'), loadMembers('adminMemberList')];
+  const tasks = [loadEvents('adminEventList'), loadKnowledge('adminKnowledgeList'), loadAlumni('adminAlumniList')];
   await Promise.all(tasks);
   updateAdminCounts();
   renderAuthState();
@@ -460,11 +460,11 @@ async function refreshAdmin() {
 function wireEvents() {
   el('loginButton')?.addEventListener('click', login);
   el('logoutButton')?.addEventListener('click', logout);
-  el('searchButton')?.addEventListener('click', () => loadMembers());
+  el('searchButton')?.addEventListener('click', () => loadAlumni());
   el('saveContentButton')?.addEventListener('click', saveContent);
   el('resetContentButton')?.addEventListener('click', resetContentForm);
-  el('saveMemberButton')?.addEventListener('click', saveMember);
-  el('resetMemberButton')?.addEventListener('click', resetMemberForm);
+  el('saveAlumniButton')?.addEventListener('click', saveAlumni);
+  el('resetAlumniButton')?.addEventListener('click', resetAlumniForm);
   document.addEventListener('click', (event) => {
     const disabledNav = event.target.closest('[data-requires].nav-disabled');
     if (disabledNav) {
@@ -473,10 +473,10 @@ function wireEvents() {
     }
     const edit = event.target.closest('[data-edit]');
     const del = event.target.closest('[data-delete]');
-    const pageControl = event.target.closest('[data-member-page]');
+    const pageControl = event.target.closest('[data-alumni-page]');
     if (pageControl && !pageControl.disabled) {
-      const target = pageControl.dataset.memberPageTarget;
-      const state = memberPaging[target];
+      const target = pageControl.dataset.alumniPageTarget;
+      const state = alumniPaging[target];
       if (!state) return;
       const pageCount = Math.max(1, Math.ceil(state.items.length / state.pageSize));
       const nextPage = {
@@ -484,14 +484,14 @@ function wireEvents() {
         prev: state.page - 1,
         next: state.page + 1,
         last: pageCount,
-      }[pageControl.dataset.memberPage];
-      if (nextPage) setMemberPage(target, nextPage);
+      }[pageControl.dataset.alumniPage];
+      if (nextPage) setAlumniPage(target, nextPage);
       return;
     }
     if (edit?.disabled || del?.disabled) return;
     if (edit) {
       const type = edit.dataset.edit;
-      if (type === 'members') editMember(edit.dataset.id);
+      if (type === 'alumni') editAlumni(edit.dataset.id);
       else editContent(type, edit.dataset.id);
     }
     if (del) deleteAdminItem(del.dataset.delete, del.dataset.id);
@@ -503,7 +503,7 @@ async function init() {
   wireEvents();
   if (page === 'home' || page === 'events') await loadEvents();
   if (page === 'knowledge') await loadKnowledge();
-  if (page === 'alumni') await loadMembers();
+  if (page === 'alumni') await loadAlumni();
   if (page === 'admin') await refreshAdmin();
 }
 
