@@ -18,3 +18,9 @@ scripts/apply_member_refactor_stage1.py
 
 # Windows metadata
 *:Zone.Identifier
+
+# Local refactor backups
+*.stage2-backup
+
+# One-off local refactor scripts
+scripts/apply_member_refactor_stage2.py
