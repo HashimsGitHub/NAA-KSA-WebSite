@@ -330,10 +330,10 @@ textarea { font-family: inherit; }
 .hero-visual { position: relative; }
 
 .hero-image-frame {
-  width: min(100%, 540px);
+  width: min(100%, 620px);
   margin-left: auto;
   position: relative;
-  border-radius: 36px 36px 36px 8px;
+  border-radius: 28px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   padding: 12px;
   background: rgba(255, 255, 255, 0.08);
@@ -342,20 +342,15 @@ textarea { font-family: inherit; }
 
 .hero-image-frame img {
   width: 100%;
-  aspect-ratio: 0.96;
-  object-fit: cover;
+  height: auto;
+  aspect-ratio: auto;
+  object-fit: contain;
   border-radius: 28px 28px 28px 6px;
   display: block;
-  filter: saturate(0.82) contrast(0.96);
 }
 
 .hero-image-frame::after {
-  content: "";
-  position: absolute;
-  inset: 12px;
-  border-radius: 28px 28px 28px 6px;
-  background: linear-gradient(180deg, transparent 45%, rgba(48, 45, 64, 0.35));
-  pointer-events: none;
+  display: none;
 }
 
 .visual-card {
