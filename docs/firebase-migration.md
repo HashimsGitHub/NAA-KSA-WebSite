@@ -1,28 +1,24 @@
-# NUST Alumni: Azure hosting with Firebase Firestore (in progress)
+# NUST Alumni migration: Firebase Hosting and Firestore, Azure API and blobs
 
-Firebase project: `nust-alumni-association`.
+Project: `nust-alumni-association`. This branch is not ready for a live deployment.
 
-The user's requirement is **no Firebase billing account**. This branch configures Firestore rules only. Do not deploy the earlier Firebase Hosting/Cloud Run design or enable Blaze.
+## No-billing target
 
-## What exists today
+- Firebase Hosting Spark plan serves `frontend/` at `https://nust-alumni-association.web.app` (subject to project/site creation). The public HTML, CSS and JavaScript are hosted there.
+- Azure Blob Storage continues to hold site images, uploaded content and documents. Confirm public read settings on assets meant to be public; private alumni media requires controlled delivery.
+- A **separate Azure Function App** hosts the NUST Python `/api` endpoints and connects to Firestore using a server credential stored in Azure settings. Firebase Spark cannot host the existing Python API with Cloud Run/Functions without a billing account.
+- Firestore stores the former Azure Table records. `firestore.rules` denies browser SDK access; server SDK access is governed by IAM.
+- The JavaScript currently calls relative `/api`. It must be updated to the standalone Azure Function App HTTPS URL *before* publishing the Firebase site. Allow the exact `https://nust-alumni-association.web.app` origin in the Azure Function App CORS configuration; test JSON requests and the `X-Session-Id` preflight. Do not put Function keys in browser JavaScript.
+- An Azure Static Web App managed API is coupled to its SWA deployment. Do not use its `nice-meadow` endpoint as the long-term NUST API when that SWA will serve VCNITY.
 
-The repository's `main` workflow deploys `frontend/` and the Python Azure Functions `api/` to an Azure Static Web App. Its API uses Azure Tables and Azure Blob Storage. Some static assets may live in Azure Blob Storage, but the repository workflow does not deploy the HTML frontend to a Blob static website.
+## Browser setup
 
-## Target
+1. In Firebase Console enable Hosting; the Spark plan supports static hosting and a `web.app` domain. Do not enable billing, Cloud Run, Cloud Functions or Firebase Storage.
+2. Create exactly one Firestore Standard database in production mode; choose its location before creation. Doha `me-central1` is an option if it meets your data-location requirements.
+3. Keep Azure Blob containers for assets. Stand up a dedicated Azure Function App for NUST and configure its CORS with only the Firebase Hosting origin and any staging origin needed.
+4. Migrate a backed-up copy of Azure Tables to Firestore and verify record counts and account behavior, then test the API and frontend on a Firebase preview channel. Keep an Azure Tables rollback copy.
+5. When testing passes, deploy Hosting to its live channel and change any desired links to the `web.app` URL. Move VCNITY to its own repository after stakeholder approval; keep NUST `main` and existing SWA running until cutover.
 
-- Keep NUST frontend on its existing Azure Static Web App for now, with existing Azure Blob content.
-- Keep the `/api/**` routes on Azure Functions, so the frontend needs no endpoint/CORS change.
-- Migrate Azure Table entities to the single free Firestore database in `nust-alumni-association`. Replace server-side table access in the Azure Functions API with the Firestore Python server SDK, preserving the existing response shape and login/session behavior.
-- Keep Azure Blob Storage for images and other files. Do not enable Firebase Storage.
-- Firestore rules deny direct browser access. The Azure Functions backend needs a tightly scoped Google service account credential, stored in Azure application settings or Key Vault, never in GitHub or frontend code. The server SDK uses IAM and bypasses Firestore rules.
-- Monitor the Firestore Spark quota. On a project without billing, operations can fail when free limits are exceeded.
+`firebase.json` intentionally has no `/api` rewrite. Firebase Hosting cannot magically run the Azure Functions backend. Publishing static files now would show pages but break login, directory and admin features because `/api` currently resolves against the page origin.
 
-## Setup
-
-1. In Firebase Console, confirm the project ID, then create **one Firestore Standard database** in production mode. `me-central1` (Doha) is a possible location for a KSA audience; confirm your data-location needs before creating the database because its location is fixed afterward. No Blaze upgrade or payment method is required for Firestore's free quota.
-2. Retain an independent backup/export of every Azure Table before migration. Compare per-table counts and sample records, including user password hashes and session handling. Never commit exports to Git.
-3. Develop the Firestore-backed Azure API in this branch and verify it locally against non-production test data. Configure the service account in Azure as a secret at deployment time.
-4. Test login, role checks, directory filtering, events, knowledge, admin CRUD and media uploads with a staging endpoint. Plan a write freeze and final sync for cutover, with an Azure Tables rollback path.
-5. Keep `main` running NUST throughout. Move VCNITY branches into a separate repository after stakeholder approval; do not merge VCNITY into NUST `main`.
-
-**Status:** The API is still Azure Tables-backed. This configuration alone does not migrate data or switch the live site.
+**Status:** Firebase Hosting config is staged. API portability, Firestore migration, Azure Function deployment, frontend API URL and user acceptance tests remain.
