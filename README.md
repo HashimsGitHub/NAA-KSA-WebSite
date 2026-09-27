@@ -2,6 +2,8 @@
 
 Site repository for the **NUST KSA Chapter Alumni Association Website**. This beta-platform serves as a central hub to connect, engage, and support National University of Sciences and Technology (NUST) alumni residing and working in the Kingdom of Saudi Arabia (KSA).
 
+**Live website:** [https://nust-alumni-association.web.app](https://nust-alumni-association.web.app)
+
 ---
 
 ### Application Screenshot
