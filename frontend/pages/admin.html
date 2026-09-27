@@ -53,7 +53,7 @@
           <input id="contentCity" placeholder="City" />
           <input id="contentTags" placeholder="Tags" />
           <textarea id="contentBody" placeholder="Description or article body"></textarea>
-          <input id="contentImage" type="file" accept="image/*" />
+          <input id="contentImageUrl" type="url" placeholder="Azure Blob HTTPS image URL" />
           <button id="saveContentButton" type="button">Save</button>
           <button id="resetContentButton" class="secondary" type="button">Clear</button>
         </div>
@@ -81,11 +81,6 @@
             <option value="inactive">Inactive</option>
             <option value="suspended">Suspended</option>
           </select>
-          <select id="aRole">
-            <option value="alumni">Alumni</option>
-            <option value="contributor">Contributor</option>
-            <option value="admin">Administrator</option>
-          </select>
           <textarea id="aBio" placeholder="Bio"></textarea>
           <button id="saveAlumniButton" type="button">Save</button>
           <button id="resetAlumniButton" class="secondary" type="button">Clear</button>
@@ -111,6 +106,6 @@
       </div>
     </section>
   </main>
-  <script src="/app.js"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>

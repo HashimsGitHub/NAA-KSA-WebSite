@@ -1,24 +1,39 @@
-# NUST Alumni migration: Firebase Hosting and Firestore, Azure API and blobs
+# NUST Alumni on Firebase Spark
 
-Project: `nust-alumni-association`. This branch is not ready for a live deployment.
+Project: `nust-alumni-association`. Work is isolated on `feature/nust-firebase-migration`.
 
-## No-billing target
+## Architecture
 
-- Firebase Hosting Spark plan serves `frontend/` at `https://nust-alumni-association.web.app` (subject to project/site creation). The public HTML, CSS and JavaScript are hosted there.
-- Azure Blob Storage continues to hold site images, uploaded content and documents. Confirm public read settings on assets meant to be public; private alumni media requires controlled delivery.
-- A **separate Azure Function App** hosts the NUST Python `/api` endpoints and connects to Firestore using a server credential stored in Azure settings. Firebase Spark cannot host the existing Python API with Cloud Run/Functions without a billing account.
-- Firestore stores the former Azure Table records. `firestore.rules` denies browser SDK access; server SDK access is governed by IAM.
-- The JavaScript currently calls relative `/api`. It must be updated to the standalone Azure Function App HTTPS URL *before* publishing the Firebase site. Allow the exact `https://nust-alumni-association.web.app` origin in the Azure Function App CORS configuration; test JSON requests and the `X-Session-Id` preflight. Do not put Function keys in browser JavaScript.
-- An Azure Static Web App managed API is coupled to its SWA deployment. Do not use its `nice-meadow` endpoint as the long-term NUST API when that SWA will serve VCNITY.
+- Firebase Hosting serves `frontend/` at `https://nust-alumni-association.web.app` after deployment.
+- Firebase Authentication handles email and password only. The email address is the login username. Passwords are not stored in Firestore.
+- Firestore stores `users`, `events`, `knowledge`, `alumni`, and `alumniPrivate` documents. Rules enforce approval and roles.
+- Azure Blob Storage serves existing public assets. Administrators upload new public images to Azure and paste their HTTPS Blob URLs into the content editor. Browser uploads require a secure backend and are unavailable in this Spark design.
+- Existing Azure Table records are disposable dummy data. No migration is required.
+- The existing Azure SWA deployment on `main` remains available during testing.
 
-## Browser setup
+## Firebase Console setup
 
-1. In Firebase Console enable Hosting; the Spark plan supports static hosting and a `web.app` domain. Do not enable billing, Cloud Run, Cloud Functions or Firebase Storage.
-2. Create exactly one Firestore Standard database in production mode; choose its location before creation. Doha `me-central1` is an option if it meets your data-location requirements.
-3. Keep Azure Blob containers for assets. Stand up a dedicated Azure Function App for NUST and configure its CORS with only the Firebase Hosting origin and any staging origin needed.
-4. Migrate a backed-up copy of Azure Tables to Firestore and verify record counts and account behavior, then test the API and frontend on a Firebase preview channel. Keep an Azure Tables rollback copy.
-5. When testing passes, deploy Hosting to its live channel and change any desired links to the `web.app` URL. Move VCNITY to its own repository after stakeholder approval; keep NUST `main` and existing SWA running until cutover.
+1. Enable **Authentication → Sign-in method → Email/Password**. Leave Google and other providers disabled. Under **Users → Add user**, create test accounts and record their UIDs.
+2. Create one **Firestore Standard** database in production mode. Choose its region before creating it; Doha (`me-central1`) is an option for a KSA audience.
+3. Register a **Web app** in **Project settings → Your apps**. Copy its public config fields into `frontend/firebase-config.js` (replace the placeholders). Never paste service-account keys into this file.
+4. Deploy the committed Firestore rules before adding personal records. For each Auth test user, create a document at `users/{UID}` with string fields `full_name`, `role` (`admin` or `alumni`) and `status` (`approved`). Its ID must be exactly the Authentication UID. Bootstrap the first administrator in the Firebase Console; browser clients cannot grant themselves admin privileges.
+5. Enable **Hosting**. From the repository root on the migration branch, with Node.js installed:
 
-`firebase.json` intentionally has no `/api` rewrite. Firebase Hosting cannot magically run the Azure Functions backend. Publishing static files now would show pages but break login, directory and admin features because `/api` currently resolves against the page origin.
+   ```sh
+   npm install -g firebase-tools
+   firebase login
+   firebase use nust-alumni-association
+   firebase deploy --only firestore:rules
+   firebase hosting:channel:deploy nust-test
+   ```
 
-**Status:** Firebase Hosting config is staged. API portability, Firestore migration, Azure Function deployment, frontend API URL and user acceptance tests remain.
+6. Test the preview URL, then deploy live with `firebase deploy --only hosting`. Keep the Azure SWA available for rollback.
+
+## Acceptance checks
+
+- A visitor sees published events; a wrong password fails; an Auth user without an approved `users/{UID}` record cannot use protected pages.
+- An approved alumni user sees active/visible alumni and published knowledge but cannot write records or read private contacts.
+- The admin creates and edits an alumni profile, event and knowledge record; private email and mobile remain in `alumniPrivate`.
+- A public image uploaded to Azure Blob Storage loads from its HTTPS URL on the Firebase preview.
+
+The old `api/` is retained for rollback. Auth accounts are created in Firebase Console, not by creating a Firestore record. Contributor publishing and secure browser-to-Azure uploads need a separate workflow. All reads count toward Spark quotas.

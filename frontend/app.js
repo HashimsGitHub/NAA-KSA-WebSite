@@ -1,10 +1,16 @@
-const api = '/api';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
+import { getFirestore, collection, doc, getDoc, getDocs, query, where, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import { firebaseConfig } from './firebase-config.js';
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 const el = (id) => document.getElementById(id);
 const page = document.body.dataset.page || 'home';
 
-let sessionId = localStorage.getItem('naa_session_id') || '';
-let currentUser = JSON.parse(localStorage.getItem('naa_user') || 'null');
+let currentUser = null;
 let adminState = { events: [], knowledge: [], alumni: [] };
 const alumniPaging = {
   alumniList: { page: 1, pageSize: 24, items: [] },
@@ -12,7 +18,7 @@ const alumniPaging = {
 };
 
 function isLoggedIn() {
-  return Boolean(sessionId && currentUser);
+  return Boolean(auth.currentUser && currentUser?.status === 'approved');
 }
 
 function role() {
@@ -20,7 +26,7 @@ function role() {
 }
 
 function canContribute() {
-  return ['admin', 'contributor'].includes(role());
+  return role() === 'admin';
 }
 
 function isAdmin() {
@@ -36,21 +42,59 @@ function navAllowed(requirement) {
   return true;
 }
 
-function sessionHeaders() {
-  return sessionId ? { 'X-Session-Id': sessionId } : {};
-}
+const result = (data, message = 'OK') => ({ success: true, data, message });
 
 async function request(path, options = {}) {
-  const headers = { ...(options.headers || {}), ...sessionHeaders() };
-  if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
-  const res = await fetch(`${api}${path}`, { ...options, headers });
-  let data;
   try {
-    data = await res.json();
-  } catch (_) {
-    data = { success: false, message: `Invalid API response. HTTP ${res.status}` };
+    const url = new URL(path, window.location.origin);
+    const parts = url.pathname.split('/').filter(Boolean);
+    const name = parts[0];
+    const id = parts[1];
+    const method = options.method || 'GET';
+    if (!['events', 'knowledge', 'alumni'].includes(name)) throw new Error('Unsupported operation.');
+    if (name !== 'events' && !isLoggedIn()) throw new Error('Login required.');
+
+    if (method === 'GET') {
+      let ref = collection(db, name);
+      if (name === 'events' || name === 'knowledge') {
+        if (!isAdmin()) ref = query(ref, where('status', '==', 'published'));
+      } else if (!isAdmin()) {
+        ref = query(ref, where('status', '==', 'active'), where('visibility', '==', 'visible'));
+      }
+      let rows = (await getDocs(ref)).docs.map((snapshot) => ({ ...snapshot.data(), id: snapshot.id }));
+      if (name === 'alumni') {
+        for (const [key, field] of [['name', 'full_name'], ['graduation_year', 'graduation_year'], ['degree', 'degree'], ['department', 'department'], ['company', 'current_company'], ['country', 'country'], ['city', 'city'], ['skills', 'skills']]) {
+          const value = (url.searchParams.get(key) || '').trim().toLowerCase();
+          if (value) rows = rows.filter((item) => String(item[field] || '').toLowerCase().includes(value));
+        }
+        rows.sort((a, b) => String(a.full_name || '').localeCompare(String(b.full_name || '')));
+      } else rows.sort((a, b) => String(b.event_date || b.created_at || '').localeCompare(String(a.event_date || a.created_at || '')));
+      return result(rows);
+    }
+
+    if (!isAdmin()) throw new Error('Administrator access required.');
+    const itemId = id || crypto.randomUUID();
+    const ref = doc(db, name, itemId);
+    if (method === 'DELETE') {
+      await deleteDoc(ref);
+      if (name === 'alumni') await deleteDoc(doc(db, 'alumniPrivate', itemId));
+      return result({ id: itemId }, 'Deleted.');
+    }
+    if (!['POST', 'PUT'].includes(method)) throw new Error('Unsupported operation.');
+    const payload = JSON.parse(options.body || '{}');
+    if (name === 'alumni') {
+      const { email = '', mobile = '', role: ignoredRole, ...publicProfile } = payload;
+      const record = { ...publicProfile, alumni_id: itemId, updated_at: new Date().toISOString() };
+      await setDoc(ref, record, { merge: true });
+      await setDoc(doc(db, 'alumniPrivate', itemId), { email, mobile }, { merge: true });
+      return result(record, 'Alumni profile saved.');
+    }
+    const record = { ...payload, id: itemId, category: name === 'events' ? 'event' : 'knowledge', updated_at: new Date().toISOString() };
+    await setDoc(ref, record, { merge: true });
+    return result(record, 'Saved.');
+  } catch (error) {
+    return { success: false, message: error.message || 'Request failed.', data: null };
   }
-  return { httpStatus: res.status, ...data };
 }
 
 function escapeHtml(value = '') {
@@ -267,48 +311,26 @@ async function loadAlumni(target = 'alumniList') {
 }
 
 async function login() {
-  const data = await request('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email: el('email').value, password: el('password').value })
-  });
-  setText('loginStatus', data.message || '');
-  if (!data.success) return;
-  sessionId = data.data.session_id;
-  currentUser = data.data.user;
-  localStorage.setItem('naa_session_id', sessionId);
-  localStorage.setItem('naa_user', JSON.stringify(currentUser));
-  renderAuthState();
-  const next = new URLSearchParams(window.location.search).get('next');
-  window.location.href = next || '/';
+  try {
+    const credentials = await signInWithEmailAndPassword(auth, el('email').value.trim(), el('password').value);
+    const profile = await getDoc(doc(db, 'users', credentials.user.uid));
+    if (!profile.exists() || profile.data().status !== 'approved') {
+      await signOut(auth);
+      throw new Error('This account has not been approved.');
+    }
+    currentUser = { ...profile.data(), email: credentials.user.email };
+    const next = new URLSearchParams(window.location.search).get('next');
+    window.location.href = next?.startsWith('/') && !next.startsWith('//') ? next : '/';
+  } catch (error) {
+    setText('loginStatus', error.message || 'Login failed.');
+  }
 }
 
 async function logout() {
-  if (sessionId) await request('/auth/logout', { method: 'POST' });
-  sessionId = '';
+  await signOut(auth);
   currentUser = null;
-  localStorage.removeItem('naa_session_id');
-  localStorage.removeItem('naa_user');
   renderAuthState();
   if (page !== 'home') window.location.href = '/';
-}
-
-async function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-async function uploadSelectedImage(file, target) {
-  if (!file) return '';
-  const uploaded = await request('/media/upload', {
-    method: 'POST',
-    body: JSON.stringify({ target, file_name: file.name, content_base64: await fileToBase64(file) })
-  });
-  if (!uploaded.success) throw new Error(uploaded.message || 'Image upload failed.');
-  return uploaded.data.url;
 }
 
 function contentPayload() {
@@ -330,8 +352,9 @@ async function saveContent() {
     const type = el('contentType').value;
     const id = el('contentId').value;
     const payload = contentPayload();
-    const upload = await uploadSelectedImage(el('contentImage').files[0], type === 'events' ? 'event' : 'knowledge');
-    if (upload) payload.cover_image_url = upload;
+    const imageUrl = el('contentImageUrl').value.trim();
+    if (imageUrl && !/^https:\/\//i.test(imageUrl)) throw new Error('Use an HTTPS image URL.');
+    if (imageUrl) payload.cover_image_url = imageUrl;
     const data = await request(id ? `/${type}/${id}` : `/${type}`, {
       method: id ? 'PUT' : 'POST',
       body: JSON.stringify(payload)
@@ -362,7 +385,6 @@ function alumniPayload() {
     linkedin_url: el('aLinkedin').value,
     bio: el('aBio').value,
     status: el('aStatus').value || 'active',
-    role: el('aRole').value || 'alumni',
     visibility: 'visible',
   };
 }
@@ -400,17 +422,19 @@ function editContent(type, id) {
   el('contentCity').value = item.city || '';
   el('contentTags').value = item.tags || '';
   el('contentStatus').value = item.status || 'published';
+  el('contentImageUrl').value = item.cover_image_url || '';
   setText('contentStatusText', `Editing ${item.title || id}`);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function editAlumni(id) {
+async function editAlumni(id) {
   const item = adminState.alumni.find((x) => x.alumni_id === id);
   if (!item) return;
   el('aId').value = id;
   el('aFullName').value = item.full_name || '';
-  el('aEmail').value = item.email || '';
-  el('aMobile').value = item.mobile || '';
+  const privateRecord = await getDoc(doc(db, 'alumniPrivate', id));
+  el('aEmail').value = privateRecord.data()?.email || '';
+  el('aMobile').value = privateRecord.data()?.mobile || '';
   el('aGraduationYear').value = item.graduation_year || '';
   el('aDegree').value = item.degree || '';
   el('aDepartment').value = item.department || '';
@@ -422,21 +446,19 @@ function editAlumni(id) {
   el('aLinkedin').value = item.linkedin_url || '';
   el('aBio').value = item.bio || '';
   el('aStatus').value = item.status || 'active';
-  el('aRole').value = item.role || 'alumni';
   setText('alumniAdminStatus', `Editing ${item.full_name || id}`);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function resetContentForm() {
   ['contentId', 'contentTitle', 'contentSummary', 'contentBody', 'contentEventDate', 'contentVenue', 'contentCity', 'contentTags'].forEach((id) => { if (el(id)) el(id).value = ''; });
-  if (el('contentImage')) el('contentImage').value = '';
+  if (el('contentImageUrl')) el('contentImageUrl').value = '';
   if (el('contentStatus')) el('contentStatus').value = 'published';
 }
 
 function resetAlumniForm() {
   ['aId', 'aFullName', 'aEmail', 'aMobile', 'aGraduationYear', 'aDegree', 'aDepartment', 'aCompany', 'aPosition', 'aCity', 'aCountry', 'aSkills', 'aLinkedin', 'aBio'].forEach((id) => { if (el(id)) el(id).value = ''; });
   if (el('aStatus')) el('aStatus').value = 'active';
-  if (el('aRole')) el('aRole').value = 'alumni';
 }
 
 function updateAdminCounts() {
@@ -500,10 +522,24 @@ function wireEvents() {
 async function init() {
   renderAuthState();
   wireEvents();
-  if (page === 'home' || page === 'events') await loadEvents();
-  if (page === 'knowledge') await loadKnowledge();
-  if (page === 'alumni') await loadAlumni();
-  if (page === 'admin') await refreshAdmin();
+  onAuthStateChanged(auth, async (user) => {
+    currentUser = null;
+    if (user) {
+      try {
+        const profile = await getDoc(doc(db, 'users', user.uid));
+        if (profile.exists() && profile.data().status === 'approved') {
+          currentUser = { ...profile.data(), email: user.email };
+        } else await signOut(auth);
+      } catch (error) {
+        setText('loginStatus', error.message || 'Unable to load account.');
+      }
+    }
+    renderAuthState();
+    if (page === 'home' || page === 'events') await loadEvents();
+    if (page === 'knowledge') await loadKnowledge();
+    if (page === 'alumni') await loadAlumni();
+    if (page === 'admin') await refreshAdmin();
+  });
 }
 
 init();
