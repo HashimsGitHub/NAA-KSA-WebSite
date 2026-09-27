@@ -1,0 +1,13 @@
+{
+  "name": "nust-alumni-portal",
+  "private": true,
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "firebase": "12.19.0"
+  },
+  "devDependencies": {
+    "vite": "6.4.3"
+  }
+}

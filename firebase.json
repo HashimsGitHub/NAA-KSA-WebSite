@@ -3,11 +3,8 @@
     "rules": "firestore.rules"
   },
   "hosting": {
-    "public": "frontend",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ]
+    "public": "dist",
+    "predeploy": ["npm ci", "npm run build"],
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
   }
 }

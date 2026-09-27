@@ -27,6 +27,8 @@ Project: `nust-alumni-association`. Work is isolated on `feature/nust-firebase-m
    firebase hosting:channel:deploy nust-test
    ```
 
+   Hosting runs `npm ci` and `npm run build` before each deploy. The build outputs `dist/` and bundles the browser SDK with Firestore Lite. Do not run `firebase init` or deploy `frontend/` directly.
+
 6. Test the preview URL, then deploy live with `firebase deploy --only hosting`. Keep the Azure SWA available for rollback.
 
 ## Acceptance checks

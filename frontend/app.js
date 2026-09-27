@@ -1,6 +1,6 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
-import { getFirestore, collection, doc, getDoc, getDocs, query, where, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { getFirestore, collection, doc, getDoc, getDocs, query, where, setDoc, deleteDoc } from 'firebase/firestore/lite';
 import { firebaseConfig } from './firebase-config.js';
 
 const app = initializeApp(firebaseConfig);
@@ -522,6 +522,8 @@ function wireEvents() {
 async function init() {
   renderAuthState();
   wireEvents();
+  // Public events do not depend on session restoration or the user profile lookup.
+  if (page === 'home' || page === 'events') void loadEvents();
   onAuthStateChanged(auth, async (user) => {
     currentUser = null;
     if (user) {
@@ -535,7 +537,6 @@ async function init() {
       }
     }
     renderAuthState();
-    if (page === 'home' || page === 'events') await loadEvents();
     if (page === 'knowledge') await loadKnowledge();
     if (page === 'alumni') await loadAlumni();
     if (page === 'admin') await refreshAdmin();
